@@ -9,3 +9,7 @@ data/room.glb
 *.upload
 firmware/**/build/
 firmware/**/sdkconfig
+models/room-*
+config/room.json
+models/*.tmp.npz
+.venv/

@@ -1,0 +1,22 @@
+menu "scanPHY node"
+    config SCANPHY_WIFI_SSID
+        string "WiFi SSID (default, overridden by provisioning)"
+        default "scanphy"
+    config SCANPHY_WIFI_PASSWORD
+        string "WiFi password"
+        default "scanphy123"
+    config SCANPHY_TARGET_IP
+        string "Jetson / server IP address"
+        default "192.168.1.100"
+    config SCANPHY_TARGET_PORT
+        int "Server UDP port"
+        default 5005
+    config SCANPHY_NODE_ID
+        int "Node id (1-3)"
+        range 1 255
+        default 1
+    config SCANPHY_RATE_HZ
+        int "Target CSI frames per second"
+        range 5 200
+        default 50
+endmenu

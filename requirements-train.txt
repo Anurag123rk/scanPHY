@@ -1,0 +1,3 @@
+# Training. On a Jetson install PyTorch with scripts/install_torch_jetson.sh instead of pip.
+torch>=1.13
+onnx>=1.14        # optional: ONNX export for TensorRT

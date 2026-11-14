@@ -342,7 +342,7 @@ def synth_dataset(n_samples: int, seed: int = 0, cfg: Optional[Dict] = None, per
 class LiveSimulator:
     """Continuously simulates the configured room with a virtual person following a script."""
 
-    SCRIPT = [("empty", 6.0), ("moving", 14.0), ("still", 12.0), ("moving", 10.0), ("still", 10.0),
+    SCRIPT = [("empty", 6.0), ("moving", 14.0), ("still", 28.0), ("moving", 10.0), ("still", 24.0),
               ("moving", 8.0), ("empty", 6.0)]
 
     def __init__(self, cfg: Dict, rate: float = 40.0, seed: int = 7):

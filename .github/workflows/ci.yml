@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q tests
+
+  firmware:
+    runs-on: ubuntu-22.04
+    container: espressif/idf:v5.2.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          cd firmware/scanphy-node
+          idf.py set-target esp32s3
+          idf.py build
+          mkdir -p ../release
+          cp build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/scanphy-node.bin ../release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanphy-node-firmware
+          path: firmware/release/*.bin

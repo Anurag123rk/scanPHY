@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scanPHY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Space+Grotesk:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cpath d='M4 16h4l3-9 5 18 4-13 3 4h5' stroke='%23fff' stroke-width='2.4' fill='none'/%3E%3C/svg%3E">
+<script type="importmap">{"imports": {"three": "./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+<div class="grain"></div>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 64 24" class="brand-wave" aria-hidden="true"><path id="brandPath" d="M0 12 L64 12"/></svg>
+    <span class="brand-name">scan<b>PHY</b></span>
+    <span class="brand-sub">wifi csi · human sensing</span>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="live" class="on">Live</button>
+    <button data-tab="calibrate">Calibrate</button>
+    <button data-tab="train">Train</button>
+    <button data-tab="models">Models</button>
+    <button data-tab="setup">Setup</button>
+  </nav>
+  <div class="pills">
+    <span class="pill" id="pillLink"><i class="dot"></i><span>OFFLINE</span></span>
+    <span class="pill" id="pillNodes">NODES 0/3</span>
+    <span class="pill" id="pillModel">MODEL —</span>
+    <button class="pill btn-ghost" id="themeBtn" title="Invert theme">◐</button>
+  </div>
+</header>
+
+<main>
+<!-- ================= LIVE ================= -->
+<section class="tab-page on" id="page-live">
+  <div class="live-grid">
+    <div class="card viewport">
+      <div class="card-h"><span>ROOM / 3D</span><span class="muted" id="roomLabel">—</span>
+        <span class="spacer"></span>
+        <button class="chip" id="viewTop">TOP</button><button class="chip" id="viewIso">ISO</button>
+        <button class="chip on" id="toggleTrail">TRAIL</button><button class="chip on" id="toggleZones">ZONES</button></div>
+      <div id="three" class="three"></div>
+      <div class="hud">
+        <div><small>X</small><b id="hudX">—</b></div>
+        <div><small>Y</small><b id="hudY">—</b></div>
+        <div><small>ZONE</small><b id="hudZone">—</b></div>
+        <div><small>CONF</small><b id="hudConf">—</b></div>
+      </div>
+      <div class="hud-tl" id="hudEngine">ENGINE —</div>
+      <div class="hud-tr" id="hudTruth"></div>
+    </div>
+
+    <div class="side">
+      <div class="card presence">
+        <div class="card-h"><span>OCCUPANCY</span><span class="spacer"></span><span class="muted" id="motionVal">motion —</span></div>
+        <div class="presence-big" id="presenceBig">NO SIGNAL</div>
+        <div class="bars" id="actBars"></div>
+        <canvas class="spark" id="motionSpark" height="48"></canvas>
+      </div>
+      <div class="card vitals">
+        <div class="card-h"><span>VITALS</span><span class="spacer"></span><span class="muted">still subject · &lt;3 m</span></div>
+        <div class="vit-row">
+          <div class="vit"><small>BREATHING</small><b id="vBreath">—</b><em>bpm</em></div>
+          <div class="vit"><small>HEART <span class="tag">EXP</span></small><b id="vHeart">—</b><em>bpm</em></div>
+        </div>
+        <canvas class="spark" id="breathWave" height="44"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-h"><span>ZONE PROBABILITY</span></div>
+        <div class="zone-grid" id="zoneGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nodes-row" id="nodesRow"></div>
+
+  <div class="card log">
+    <div class="card-h"><span>EVENTS</span><span class="spacer"></span><span class="muted" id="udpStat">—</span></div>
+    <ul id="events"></ul>
+  </div>
+</section>
+
+<!-- ================= CALIBRATE ================= -->
+<section class="tab-page" id="page-calibrate">
+  <div class="two">
+    <div class="card">
+      <div class="card-h"><span>CALIBRATION WIZARD</span></div>
+      <ol class="steps">
+        <li><b>Empty-room baseline.</b> Everyone leaves the room. scanPHY learns what the room looks like with no one in it.
+          <div class="row"><label>seconds <input type="number" id="blSecs" value="20" min="5" max="120"></label>
+          <button class="btn" id="btnBaseline">CAPTURE BASELINE</button></div>
+          <div class="progress"><i id="blProg"></i></div></li>
+        <li><b>Grid recording.</b> Stand still at each highlighted spot on the map until the bar fills. Then walk around and leave the room for the last two steps.
+          <div class="row">
+            <label>grid spacing <select id="gridStep"><option>0.75</option><option selected>1.0</option><option>1.5</option></select> m</label>
+            <label>seconds / spot <input type="number" id="ptSecs" value="10" min="3" max="60"></label>
+            <label class="check"><input type="checkbox" id="autoTrainAfter" checked> train when finished</label>
+          </div>
+          <div class="row"><button class="btn" id="btnWizard">START WIZARD</button><button class="btn btn-ghost" id="btnWizardStop">STOP</button>
+          <span class="muted" id="wizInfo"></span></div>
+        </li>
+        <li><b>Train.</b> The model is fine-tuned on the Jetson (GPU) using your recordings and hot-swapped live.</li>
+      </ol>
+      <div class="wizard-now" id="wizNow">
+        <div class="wiz-step" id="wizStep">IDLE</div>
+        <div class="wiz-big" id="wizBig">—</div>
+        <div class="progress big"><i id="wizProg"></i></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span>FLOOR MAP</span><span class="spacer"></span><span class="muted">click to record a single spot</span></div>
+      <canvas id="floorMap" class="floor"></canvas>
+      <div class="row">
+        <label>manual activity <select id="manAct"><option>still</option><option>moving</option><option>empty</option></select></label>
+        <label>seconds <input type="number" id="manSecs" value="10" min="3" max="120"></label>
+        <button class="btn btn-ghost" id="btnManualFree">RECORD (NO POSITION)</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><span>RECORDINGS</span><span class="spacer"></span><span class="muted" id="recCount">0</span>
+      <button class="chip" id="btnRecRefresh">REFRESH</button><button class="chip danger" id="btnRecClear">DELETE ALL</button></div>
+    <table class="tbl" id="recTable"><thead><tr><th>id</th><th>label</th><th>position</th><th>frames</th><th>size</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
+
+<!-- ================= TRAIN ================= -->
+<section class="tab-page" id="page-train">
+  <div class="two">
+    <div class="card">
+      <div class="card-h"><span>TRAINING</span><span class="spacer"></span><span class="pill" id="trainStatus">IDLE</span></div>
+      <div class="row">
+        <label>epochs <input type="number" id="trEpochs" value="60" min="5" max="400"></label>
+        <label>synthetic windows <input type="number" id="trSynth" value="24000" min="0" max="500000" step="1000"></label>
+        <label class="check"><input type="checkbox" id="trUseRec" checked> use my recordings</label>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnTrain">TRAIN NOW</button>
+        <button class="btn btn-ghost" id="btnTrainStop">STOP</button>
+        <label class="check"><input type="checkbox" id="autoTrain"> auto-train after 8 new recordings</label>
+      </div>
+      <div class="progress big"><i id="trProg"></i></div>
+      <div class="metrics" id="trMetrics"></div>
+      <pre class="console" id="trLog"></pre>
+    </div>
+    <div class="card">
+      <div class="card-h"><span>LEARNING CURVE</span><span class="spacer"></span><span class="legend"><i class="l1"></i>loss <i class="l2"></i>activity <i class="l3"></i>zone</span></div>
+      <canvas id="trChart" class="chart"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MODELS ================= -->
+<section class="tab-page" id="page-models">
+  <div class="card">
+    <div class="card-h"><span>MODELS</span><span class="spacer"></span>
+      <label class="btn btn-ghost upload">UPLOAD .NPZ<input type="file" id="modelUpload" accept=".npz"></label>
+      <button class="chip" id="btnModelsRefresh">REFRESH</button></div>
+    <p class="muted">Models are single <code>.npz</code> files. Train anywhere with <code>python -m scanphy train</code>, then upload here or copy into <code>models/</code> on the Jetson.</p>
+    <table class="tbl" id="modelTable"><thead><tr><th>name</th><th>kind</th><th>created</th><th>activity</th><th>zone</th><th>xy err</th><th>device</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
+
+<!-- ================= SETUP ================= -->
+<section class="tab-page" id="page-setup">
+  <div class="two">
+    <div class="card">
+      <div class="card-h"><span>ROOM &amp; NODES</span><span class="spacer"></span><span class="muted">metres · origin = floor corner</span></div>
+      <form id="cfgForm" class="cfg"></form>
+      <div class="row"><button class="btn" id="btnSaveCfg">SAVE CONFIG</button><span class="muted" id="cfgMsg"></span></div>
+      <div class="row"><label class="btn btn-ghost upload">UPLOAD ROOM .GLB<input type="file" id="glbUpload" accept=".glb"></label>
+        <span class="muted">Blender export, units = metres, origin at a floor corner.</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span>FLASH THE ESP32-S3 NODES</span></div>
+      <pre class="console code" id="flashCmds"></pre>
+      <p class="muted">Place nodes in a triangle around the room at desk height (~1 m), not all on one wall, with clear line of sight between at least two pairs.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

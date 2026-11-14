@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from . import config as cfgmod
-from .features import (ACTIVITIES, FEATURE_DIM, N_SLOTS, geometry_features, shape_profile, window_features)
+from .features import (ACTIVITIES, N_SLOTS, geometry_features, shape_profile, window_features)
 
 
 def _baseline_to_json(b: Optional[Dict]) -> Optional[Dict]:
@@ -151,5 +151,3 @@ def load_all(directory: str, window_s: float = 1.0, hop_s: float = 0.25):
     cat = [np.concatenate([p[j] for p in parts]) for j in range(6)]
     return cat + [np.concatenate(groups)]
 
-
-EMPTY = (np.zeros((0, FEATURE_DIM), np.float32),)

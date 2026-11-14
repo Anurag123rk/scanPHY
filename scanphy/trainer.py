@@ -18,6 +18,7 @@ dashboard's training panel).
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import os
@@ -288,9 +289,12 @@ def train(args) -> int:
             net.load_state_dict({k: torch.tensor(v) for k, v in state.items()})
             exp = Exportable(net.cpu().eval(), mu, sigma)
             onnx_path = os.path.splitext(args.out)[0] + ".onnx"
+            kw = {}
+            if "dynamo" in inspect.signature(torch.onnx.export).parameters:
+                kw["dynamo"] = False  # classic exporter: no onnxscript dependency
             torch.onnx.export(exp, torch.zeros(1, FEATURE_DIM), onnx_path, input_names=["features"],
                               output_names=["activity", "zone", "xy"],
-                              dynamic_axes={"features": {0: "n"}}, opset_version=17, dynamo=False)
+                              dynamic_axes={"features": {0: "n"}}, opset_version=17, **kw)
             emit(progress, event="log", message="ONNX exported: %s" % onnx_path)
         except Exception as exc:  # ONNX is optional
             emit(progress, event="log", message="ONNX export skipped (%s)" % exc)

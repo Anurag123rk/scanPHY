@@ -105,6 +105,7 @@ class Engine:
         self._empty_streak = 0.0
         self._last_tick = time.time()
         self._last_vitals = 0.0
+        self._still_since: Optional[float] = None
         self.vitals: Dict = {"breathing_bpm": None, "breathing_conf": 0.0, "heart_bpm": None, "heart_conf": 0.0}
 
     # ---- configuration ------------------------------------------------------------------
@@ -380,6 +381,10 @@ class Engine:
             motion = 0.0
 
         activity = ACTIVITIES[int(np.argmax(self.act_probs))] if any(valid) else "no-signal"
+        if activity != "still":
+            self._still_since = None
+        elif self._still_since is None:
+            self._still_since = now
         if now - self._last_vitals > 1.0:
             self._last_vitals = now
             self._update_vitals(now, activity)
@@ -389,12 +394,18 @@ class Engine:
         if activity != "still":
             self.vitals = {"breathing_bpm": None, "breathing_conf": 0.0, "heart_bpm": None, "heart_conf": 0.0}
             return
+        # Only analyse the stretch since the person became still (movement swamps breathing).
+        span = min(32.0, now - (self._still_since or now) + 1.0)
         best = None
+        if span < 13.0:
+            self.vitals = {"breathing_bpm": None, "breathing_conf": 0.0, "heart_bpm": None, "heart_conf": 0.0,
+                           "settling": round(13.0 - span, 1)}
+            return
         for buf in self.nodes.values():
-            w = buf.window(now, 32.0)
+            w = buf.window(now, span)
             if w is None:
                 continue
-            v = vitals.estimate(w["t"], w["profiles"])
+            v = vitals.estimate(w["t"], w["profiles"], seconds=span)
             if v["breathing_bpm"] is not None and (best is None or v["breathing_conf"] > best["breathing_conf"]):
                 best = v
         if best is not None:
@@ -458,4 +469,5 @@ class Engine:
             "baseline_job": bjob,
             "model": self.model.info() if self.model else {"name": None, "error": self.model_error},
             "truth": self.truth,
+            "events": list(self.events)[:25],
         }
