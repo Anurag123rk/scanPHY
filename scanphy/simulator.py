@@ -16,7 +16,7 @@ path as real data. It is used for:
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -162,15 +162,14 @@ class Scene:
         return {"points": pts, "height": self.rng.uniform(1.5, 1.9), "depth": self.rng.uniform(0.45, 0.8)}
 
     # -- CSI synthesis ------------------------------------------------------------------
-    def channel(self, k: int, pos: Optional[np.ndarray], chest: Optional[np.ndarray], body: Optional[Dict],
-                T: int) -> np.ndarray:
+    def channel(self, k: int, people: Sequence[Tuple[np.ndarray, np.ndarray, Dict]], T: int) -> np.ndarray:
+        """CSI (T, 64) for node k with `people` = [(pos (T,2), chest (T,), body), ...] (may be empty)."""
         p = self.paths[k]
-        if pos is None:
-            att = np.ones((T, len(p["A"])))
-        else:
-            att = self._blocking(k, pos, body["depth"])
+        att = np.ones((T, len(p["A"])))
+        for pos, _chest, body in people:
+            att = att * self._blocking(k, pos, body["depth"])
         H = (att * p["A"][None, :]) @ p["E"]
-        if pos is not None:
+        for pos, chest, body in people:
             H = H + self.body_scatter(k, pos, chest, body)
         return H
 
@@ -259,9 +258,20 @@ def _trajectory(rng, W, D, T, rate, activity):
     return pos, chest
 
 
+MAX_PEOPLE = 3
+
+
+def _sample_counts(rng: np.random.Generator) -> Tuple[int, int]:
+    """(n_moving, n_still) with total <= MAX_PEOPLE; single-person rooms are the common case."""
+    r = rng.random()
+    total = 0 if r < 0.22 else (1 if r < 0.62 else (2 if r < 0.85 else 3))
+    n_move = int(rng.integers(0, total + 1))
+    return n_move, total - n_move
+
+
 def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0, 60.0),
-                        window_s: float = 1.0):
-    """Generate `n` labelled windows from one random scene. Returns arrays."""
+                        window_s: float = 1.0) -> Dict[str, np.ndarray]:
+    """Generate `n` labelled windows from one random scene."""
     rng = np.random.default_rng(seed)
     layout = cfg if cfg is not None else random_layout(rng)
     scene = Scene(layout, rng, channel=int(rng.choice([1, 6, 11])))
@@ -274,25 +284,29 @@ def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0
     baselines = []
     Tb = 80
     for k in range(n_nodes):
-        iq, rssi = scene.quantize(k, scene.channel(k, None, None, None, Tb))
+        iq, rssi = scene.quantize(k, scene.channel(k, [], Tb))
         baselines.append(make_baseline(shape_profile(amplitudes(iq)), rssi))
     scene.perturb(0.04)
 
-    X = np.zeros((n, FEATURE_DIM), dtype=np.float32)
-    act = np.zeros(n, dtype=np.int64)
-    xy = np.zeros((n, 2), dtype=np.float32)
-    zone = np.zeros(n, dtype=np.int64)
-    dims = np.tile(np.array([W, D], dtype=np.float32), (n, 1))
+    out = {
+        "X": np.zeros((n, FEATURE_DIM), dtype=np.float32),
+        "act": np.zeros(n, dtype=np.int64),
+        "xy": np.zeros((n, 2), dtype=np.float32),
+        "hx": np.zeros(n, dtype=bool),
+        "zone": np.zeros(n, dtype=np.int64),
+        "dims": np.tile(np.array([W, D], dtype=np.float32), (n, 1)),
+        "n_move": np.zeros(n, dtype=np.int64),
+        "n_still": np.zeros(n, dtype=np.int64),
+    }
     for i in range(n):
-        r = rng.random()
-        a = "empty" if r < 0.22 else ("still" if r < 0.55 else "moving")
+        n_move, n_still = _sample_counts(rng)
         rate = rng.uniform(*rate_range)
         T = max(8, int(rate * window_s))
-        body = scene.random_body() if a != "empty" else None
-        if a == "empty":
-            pos = chest = None
-        else:
-            pos, chest = _trajectory(rng, W, D, T, rate, a)
+        people = []
+        for j in range(n_move + n_still):
+            kind = "moving" if j < n_move else "still"
+            pos, chest = _trajectory(rng, W, D, T, rate, kind)
+            people.append((pos, chest, scene.random_body()))
         # Node-count dropout: the model must also work with 1 or 2 boards (or a board offline).
         r_nodes = rng.random()
         if r_nodes < 0.15 and n_nodes > 1:
@@ -306,15 +320,17 @@ def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0
             if k not in active or rng.random() < 0.03:
                 slots.append(None)
                 continue
-            iq, rssi = scene.quantize(k, scene.channel(k, pos, chest, body, T))
+            iq, rssi = scene.quantize(k, scene.channel(k, people, T))
             slots.append({"profiles": shape_profile(amplitudes(iq)), "rssi": rssi})
-        X[i] = window_features(slots, baselines + [None] * (N_SLOTS - n_nodes), geom)
-        act[i] = ACTIVITIES.index(a)
-        if pos is not None:
-            m = pos.mean(axis=0)
-            xy[i] = (m[0] / W, m[1] / D)
-            zone[i] = cfgmod.zone_index(xy[i, 0], xy[i, 1], rows, cols)
-    return X, act, xy, zone, dims
+        out["X"][i] = window_features(slots, baselines + [None] * (N_SLOTS - n_nodes), geom)
+        out["act"][i] = 0 if not people else (2 if n_move else 1)
+        out["n_move"][i], out["n_still"][i] = n_move, n_still
+        if len(people) == 1:  # position labels only make sense for a single person
+            m = people[0][0].mean(axis=0)
+            out["xy"][i] = (m[0] / W, m[1] / D)
+            out["hx"][i] = True
+            out["zone"][i] = cfgmod.zone_index(out["xy"][i, 0], out["xy"][i, 1], rows, cols)
+    return out
 
 
 def _worker(args):
@@ -324,7 +340,7 @@ def _worker(args):
 
 def synth_dataset(n_samples: int, seed: int = 0, cfg: Optional[Dict] = None, per_scene: int = 24,
                   workers: int = 0):
-    """Domain-randomised synthetic dataset -> (X, activity, xy_norm, zone, room_dims).
+    """Domain-randomised synthetic dataset -> dict of arrays (see synth_scene_samples).
 
     If cfg is given its geometry is kept fixed (wall materials/clutter still vary)."""
     n_scenes = max(1, n_samples // per_scene)
@@ -335,12 +351,7 @@ def synth_dataset(n_samples: int, seed: int = 0, cfg: Optional[Dict] = None, per
             parts = pool.map(_worker, jobs, chunksize=4)
     else:
         parts = [_worker(j) for j in jobs]
-    X = np.concatenate([p[0] for p in parts])
-    act = np.concatenate([p[1] for p in parts])
-    xy = np.concatenate([p[2] for p in parts])
-    zone = np.concatenate([p[3] for p in parts])
-    dims = np.concatenate([p[4] for p in parts])
-    return X, act, xy, zone, dims
+    return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
 
 
 # ---------------------------------------------------------------------------------------
@@ -348,69 +359,77 @@ def synth_dataset(n_samples: int, seed: int = 0, cfg: Optional[Dict] = None, per
 # ---------------------------------------------------------------------------------------
 
 class LiveSimulator:
-    """Continuously simulates the configured room with a virtual person following a script."""
+    """Continuously simulates the configured room with virtual people following a script."""
 
-    SCRIPT = [("empty", 6.0), ("moving", 14.0), ("still", 28.0), ("moving", 10.0), ("still", 24.0),
-              ("moving", 8.0), ("empty", 6.0)]
+    # (people moving, people still, seconds)
+    SCRIPT = [(0, 0, 8.0), (1, 0, 14.0), (0, 1, 28.0), (1, 1, 22.0), (2, 0, 14.0), (0, 2, 18.0),
+              (1, 0, 10.0), (0, 0, 8.0)]
 
     def __init__(self, cfg: Dict, rate: float = 40.0, seed: int = 7):
         self.cfg = cfg
         self.rate = rate
         self.rng = np.random.default_rng(seed)
         self.scene = Scene(cfg, self.rng)
-        self.body = self.scene.random_body()
         self.t = 0.0
         self.seq = 0
         self.phase = 0
         self.phase_t = 0.0
         W, D = self.scene.W, self.scene.D
-        self.pos = np.array([W * 0.5, D * 0.5])
-        self.target = self._waypoint()
-        self.breath_hz = 0.25  # 15 breaths / minute
-        self.heart_hz = 1.2
+        self.people = []
+        for i, hz in enumerate((0.25, 0.3)):
+            self.people.append({"pos": np.array([W * (0.35 + 0.3 * i), D * (0.4 + 0.2 * i)]),
+                                "target": self._waypoint(), "body": self.scene.random_body(),
+                                "breath_hz": hz, "heart_hz": 1.2 + 0.1 * i})
 
     def _waypoint(self):
         W, D = self.scene.W, self.scene.D
         return np.array([self.rng.uniform(0.5, W - 0.5), self.rng.uniform(0.5, D - 0.5)])
 
+    def _roles(self) -> List[str]:
+        n_move, n_still, _ = self.SCRIPT[self.phase]
+        return ["moving"] * n_move + ["still"] * n_still
+
     @property
     def activity(self) -> str:
-        return self.SCRIPT[self.phase][0]
+        roles = self._roles()
+        return "empty" if not roles else ("moving" if "moving" in roles else "still")
 
     def truth(self) -> Dict:
-        a = self.activity
-        return {"activity": a, "x": float(self.pos[0]), "y": float(self.pos[1]),
-                "breathing_bpm": self.breath_hz * 60 if a == "still" else None}
+        roles = self._roles()
+        out = {"activity": self.activity, "x": None, "y": None, "breathing_bpm": None,
+               "people": len(roles), "moving": roles.count("moving"), "still": roles.count("still")}
+        if roles:
+            p = self.people[0]
+            out["x"], out["y"] = float(p["pos"][0]), float(p["pos"][1])
+            if roles == ["still"]:
+                out["breathing_bpm"] = p["breath_hz"] * 60
+        return out
 
     def step(self) -> List[Tuple[int, np.ndarray, int]]:
         """Advance one frame period; returns [(node_id, iq int8 (128,), rssi)]."""
         dt = 1.0 / self.rate
         self.t += dt
         self.phase_t += dt
-        if self.phase_t > self.SCRIPT[self.phase][1]:
+        if self.phase_t > self.SCRIPT[self.phase][2]:
             self.phase = (self.phase + 1) % len(self.SCRIPT)
             self.phase_t = 0.0
-            if self.activity == "moving":
-                self.target = self._waypoint()
-        a = self.activity
-        if a == "moving":
-            d = self.target - self.pos
-            dist = float(np.linalg.norm(d))
-            if dist < 0.15:
-                self.target = self._waypoint()
-            else:
-                self.pos = self.pos + d / dist * 0.8 * dt
-        chest = 0.006 * math.sin(2 * math.pi * self.breath_hz * self.t) + \
-            0.0004 * math.sin(2 * math.pi * self.heart_hz * self.t)
-        if a == "moving":
-            chest += 0.01 * math.sin(2 * math.pi * 1.8 * self.t)
+        people = []
+        for person, role in zip(self.people, self._roles()):
+            if role == "moving":
+                d = person["target"] - person["pos"]
+                dist = float(np.linalg.norm(d))
+                if dist < 0.15:
+                    person["target"] = self._waypoint()
+                else:
+                    person["pos"] = person["pos"] + d / dist * 0.8 * dt
+            chest = 0.006 * math.sin(2 * math.pi * person["breath_hz"] * self.t) + \
+                0.0004 * math.sin(2 * math.pi * person["heart_hz"] * self.t)
+            if role == "moving":
+                chest += 0.01 * math.sin(2 * math.pi * 1.8 * self.t)
+            people.append((person["pos"][None, :].copy(), np.array([chest]), person["body"]))
         out = []
         for k, node in enumerate(self.cfg["nodes"][:N_SLOTS]):
-            if a == "empty":
-                H = self.scene.channel(k, None, None, None, 1)
-            else:
-                H = self.scene.channel(k, self.pos[None, :], np.array([chest]), self.body, 1)
-            iq, rssi = self.scene.quantize(k, H)
+            iq, rssi = self.scene.quantize(k, self.scene.channel(k, people, 1))
             out.append((int(node["id"]), iq[0], int(rssi[0])))
         self.seq += 1
         return out

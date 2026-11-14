@@ -193,12 +193,53 @@ def make_app(hub: Hub) -> web.Application:
         body = await _body(req)
         label = {"activity": body.get("activity", "still"), "x": body.get("x"), "y": body.get("y"),
                  "note": body.get("note", "")}
+        for k in ("moving_count", "still_count"):
+            if body.get(k) is not None:
+                label[k] = max(0, min(3, int(body[k])))
         if label["x"] is not None:
             label["x"], label["y"] = float(label["x"]), float(label["y"])
         try:
             return _json(hub.engine.start_recording(label, float(body.get("seconds", 10))))
         except (RuntimeError, ValueError) as exc:
             return _err(str(exc))
+
+    async def autocal_start(req):
+        body = await _body(req)
+        try:
+            hub.engine.start_autocal(float(body.get("seconds", 120)))
+        except RuntimeError as exc:
+            return _err(str(exc))
+        return _json({"ok": True})
+
+    async def autocal_cancel(_req):
+        hub.engine.cancel_autocal()
+        return _json({"ok": True})
+
+    async def autocal_apply(_req):
+        res = hub.engine.autocal_result
+        if not res or not res.get("suggestion"):
+            return _err("no auto-calibration result to apply")
+        sug = res["suggestion"]
+        patch = {"router": sug["router"]}
+        if sug.get("room_estimated"):
+            patch["room"] = sug["room"]
+        try:
+            cfg = cfgmod.update_config(hub.cfg, patch)
+        except (ValueError, KeyError) as exc:
+            return _err(str(exc))
+        hub.cfg = cfg
+        hub.engine.set_config(cfg)
+        cfgmod.save_config(cfg, hub.config_path)
+        await hub.broadcast({"type": "config", "config": cfg})
+        hub.engine.log("auto-calibration layout applied")
+        return _json({"ok": True, "config": cfg})
+
+    async def history(req):
+        try:
+            minutes = float(req.query.get("minutes", 10))
+        except ValueError:
+            minutes = 10.0
+        return _json(hub.engine.history_summary(max(1.0, min(60.0, minutes))))
 
     async def record_cancel(_req):
         hub.engine.cancel_recording()
@@ -342,6 +383,10 @@ def make_app(hub: Hub) -> web.Application:
     r.add_post("/api/baseline", baseline)
     r.add_post("/api/record", record_start)
     r.add_post("/api/record/cancel", record_cancel)
+    r.add_post("/api/autocal", autocal_start)
+    r.add_post("/api/autocal/cancel", autocal_cancel)
+    r.add_post("/api/autocal/apply", autocal_apply)
+    r.add_get("/api/history", history)
     r.add_get("/api/recordings", recordings)
     r.add_delete("/api/recordings", recordings_clear)
     r.add_delete("/api/recordings/{name}", recording_delete)

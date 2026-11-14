@@ -25,8 +25,12 @@ def test_window_features_dim_and_missing_nodes():
 
 
 def test_synthetic_samples():
-    X, act, xy, zone, dims = synth_scene_samples(None, 12, seed=1)
-    assert X.shape == (12, FEATURE_DIM)
-    assert np.isfinite(X).all()
-    assert ((xy >= 0) & (xy <= 1)).all()
-    assert zone.max() < 9
+    d = synth_scene_samples(None, 24, seed=1)
+    assert d["X"].shape == (24, FEATURE_DIM)
+    assert np.isfinite(d["X"]).all()
+    assert ((d["xy"] >= 0) & (d["xy"] <= 1)).all()
+    assert d["zone"].max() < 9
+    total = d["n_move"] + d["n_still"]
+    assert total.max() <= 3
+    assert np.array_equal(d["act"] == 0, total == 0)      # empty <=> nobody
+    assert not d["hx"][total != 1].any()                   # xy only labelled for one person

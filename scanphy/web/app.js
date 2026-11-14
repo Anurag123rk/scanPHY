@@ -42,6 +42,7 @@ document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
   if (activeTab === "models") loadModels();
   if (activeTab === "setup") buildCfgForm();
   if (activeTab === "train") drawTrainChart();
+  if (activeTab === "people") loadHistory();
 });
 
 // ------------------------------------------------------------------ brand wave animation
@@ -295,11 +296,22 @@ $("#viewIso").onclick = () => scene3d.iso();
 $("#toggleTrail").onclick = (e) => { scene3d.showTrail = !scene3d.showTrail; e.target.classList.toggle("on", scene3d.showTrail); };
 $("#toggleZones").onclick = (e) => { scene3d.showZones = !scene3d.showZones; e.target.classList.toggle("on", scene3d.showZones); if (scene3d.zoneGroup) scene3d.zoneGroup.visible = scene3d.showZones; };
 
+// ------------------------------------------------------------------ canvas sizing
+// Size a canvas backing store from its CSS box. Rounded integers + a fixed CSS height are
+// essential: with a fractional devicePixelRatio (Windows 125 % / 150 % scaling) comparing
+// canvas.width to w * dpr never matches, and an unsized canvas then grows every frame.
+function fitCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(c.clientWidth)), h = Math.max(1, Math.round(c.clientHeight));
+  const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+  if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; }
+  const ctx = c.getContext("2d"); ctx.setTransform(bw / w, 0, 0, bh / h, 0, 0);
+  return { ctx, w, h };
+}
+
 // ------------------------------------------------------------------ sparklines
 function drawSpark(canvas, data, { max = null, fill = true } = {}) {
-  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight || canvas.height;
-  if (canvas.width !== w * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
-  const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const { ctx, w, h } = fitCanvas(canvas); ctx.clearRect(0, 0, w, h);
   if (!data.length) return;
   const m = max ?? Math.max(1e-6, ...data);
   ctx.beginPath();
@@ -310,9 +322,7 @@ function drawSpark(canvas, data, { max = null, fill = true } = {}) {
 const motionHist = [];
 let breathPhase = 0;
 function drawBreath(bpm) {
-  const c = $("#breathWave"), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight || 44;
-  if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
-  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const { ctx, w, h } = fitCanvas($("#breathWave")); ctx.clearRect(0, 0, w, h);
   ctx.strokeStyle = css("--fg3"); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke(); ctx.setLineDash([]);
   if (!bpm) return;
   breathPhase += (bpm / 60) * 0.1 * 2 * Math.PI;
@@ -379,6 +389,9 @@ function updateLive(s) {
     b.innerHTML = `<span>${k.toUpperCase()}</span><div class="track"><div class="fill" style="width:${(probs[k] * 100).toFixed(1)}%"></div></div><span>${(probs[k] * 100).toFixed(0)}%</span>`;
     bars.appendChild(b);
   }
+  const ppl = s.people || { total: 0, moving: 0, still: 0 };
+  $("#cTotal").textContent = ppl.total; $("#cMoving").textContent = ppl.moving; $("#cStill").textContent = ppl.still;
+  $("#hudPeople").textContent = ppl.total;
   $("#motionVal").textContent = "motion " + fmt(s.motion, 2);
   motionHist.push(s.motion); if (motionHist.length > 150) motionHist.shift();
   drawSpark($("#motionSpark"), motionHist);
@@ -390,7 +403,7 @@ function updateLive(s) {
   $("#hudZone").textContent = s.zone || "—";
   $("#hudConf").textContent = s.presence ? (s.confidence * 100).toFixed(0) + "%" : "—";
   $("#hudEngine").textContent = `ENGINE ${String(s.engine).toUpperCase()} · ${s.udp.source === "sim" ? "SIMULATOR" : "UDP " + s.udp.port}`;
-  $("#hudTruth").textContent = s.truth ? `SIM TRUTH ◇ ${s.truth.activity.toUpperCase()}${s.truth.activity !== "empty" ? ` (${fmt(s.truth.x, 1)}, ${fmt(s.truth.y, 1)})` : ""}` : "";
+  $("#hudTruth").textContent = s.truth ? `SIM TRUTH ◇ ${s.truth.people ?? 0} PEOPLE (${s.truth.moving ?? 0} MOVING · ${s.truth.still ?? 0} STILL)${s.truth.people ? ` · P1 (${fmt(s.truth.x, 1)}, ${fmt(s.truth.y, 1)})` : ""}` : "";
   // zones
   const zg = $("#zoneGrid");
   if (s.zones) {
@@ -434,9 +447,7 @@ function drawFloor() {
   const c = $("#floorMap"); if (!CFG || !c.clientWidth) return;
   const W = CFG.room.width, D = CFG.room.depth;
   c.style.aspectRatio = `${W} / ${D}`;
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  c.width = w * dpr; c.height = h * dpr;
-  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const { ctx, w, h } = fitCanvas(c);
   const pad = 18, sx = (w - 2 * pad) / W, sy = (h - 2 * pad) / D;
   const P = (x, y) => [pad + x * sx, pad + y * sy];
   const fg = css("--fg"), fg2 = css("--fg2"), fg3 = css("--fg3"), line = css("--line");
@@ -484,8 +495,12 @@ function drawFloor() {
   };
 }
 $("#gridStep").onchange = drawFloor;
+$("#btnViewPeople").onclick = () => document.querySelector('#tabs button[data-tab="people"]').click();
 $("#btnManualFree").onclick = async () => {
-  try { await api("/api/record", { json: { activity: $("#manAct").value, seconds: +$("#manSecs").value } }); toast("recording " + $("#manAct").value); }
+  const body = { activity: $("#manAct").value, seconds: +$("#manSecs").value };
+  if ($("#manMove").value !== "") body.moving_count = +$("#manMove").value;
+  if ($("#manStill").value !== "") body.still_count = +$("#manStill").value;
+  try { await api("/api/record", { json: body }); toast("recording " + body.activity); }
   catch (e) { toast(e.message); }
 };
 $("#btnBaseline").onclick = async () => {
@@ -578,9 +593,7 @@ function updateTrain(tr) {
 }
 function drawTrainChart() {
   const c = $("#trChart"); if (!c.clientWidth) return;
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  c.width = w * dpr; c.height = h * dpr;
-  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const { ctx, w, h } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
   const hist = lastTrain ? lastTrain.history : [];
   const pad = 30;
   ctx.strokeStyle = css("--line"); ctx.lineWidth = 1;
@@ -671,6 +684,103 @@ $("#btnSaveCfg").onclick = async () => {
   catch (e) { $("#cfgMsg").textContent = e.message; }
 };
 
+// ------------------------------------------------------------------ people
+let histWin = 10, histData = null;
+document.querySelectorAll("[data-win]").forEach((b) => b.onclick = () => {
+  histWin = +b.dataset.win;
+  document.querySelectorAll("[data-win]").forEach((x) => x.classList.toggle("on", x === b));
+  loadHistory();
+});
+async function loadHistory() {
+  try { histData = await (await fetch("/api/history?minutes=" + histWin)).json(); } catch (e) { return; }
+  $("#pWin").textContent = histWin;
+  $("#pPeak").textContent = histData.peak;
+  $("#pOcc").textContent = histData.occupied_pct + "%";
+  $("#pAvg").textContent = histData.avg_people;
+  drawPeopleChart();
+}
+setInterval(() => { if (activeTab === "people") loadHistory(); }, 2000);
+function drawDist(el_, probs) {
+  if (el_.childElementCount !== 4) el_.innerHTML = [0, 1, 2, 3].map((i) => `<div><span>${i}</span></div>`).join("");
+  probs.forEach((p, i) => { el_.children[i].style.height = Math.max(2, p * 46).toFixed(0) + "px"; el_.children[i].style.opacity = 0.25 + 0.75 * p; });
+}
+function updatePeople(s) {
+  const p = s.people; if (!p) return;
+  $("#pTotal").textContent = p.total; $("#pMoving").textContent = p.moving; $("#pStill").textContent = p.still;
+  $("#pTotalSub").textContent = p.total ? `${p.moving} moving · ${p.still} still` : (s.activity === "no-signal" ? "no signal" : "room is empty");
+  drawDist($("#pDistMove"), p.p_moving); drawDist($("#pDistStill"), p.p_still);
+  const ev = s.events.filter((e) => e.msg.startsWith("people:") || e.msg.startsWith("presence") || e.msg.startsWith("room is empty"));
+  $("#peopleEvents").innerHTML = ev.map((e) => `<li><time>${new Date(e.t * 1000).toLocaleTimeString()}</time><span>${esc(e.msg)}</span></li>`).join("") || `<li class="muted">no changes yet</li>`;
+}
+function drawPeopleChart() {
+  const c = $("#peopleChart"); if (!c.clientWidth) return;
+  const { ctx, w, h } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
+  const padL = 30, padB = 22, top = 10, ymax = 3;
+  const fg = css("--fg"), fg3 = css("--fg3"), line = css("--line");
+  ctx.font = "10px JetBrains Mono, monospace"; ctx.fillStyle = fg3; ctx.strokeStyle = line; ctx.lineWidth = 1;
+  for (let i = 0; i <= ymax; i++) {
+    const y = h - padB - (i / ymax) * (h - padB - top);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - 6, y); ctx.stroke(); ctx.fillText(String(i), 10, y + 3);
+  }
+  const now = Date.now() / 1000, t0 = now - histWin * 60;
+  const X = (t) => padL + ((t - t0) / (now - t0)) * (w - padL - 6);
+  const Y = (v) => h - padB - (Math.min(v, ymax) / ymax) * (h - padB - top);
+  for (let m = 0; m <= histWin; m += histWin <= 10 ? 2 : 10) { const x = X(now - m * 60); ctx.fillText(m ? `-${m}m` : "now", x - 12, h - 6); }
+  const pts = histData ? histData.points : [];
+  if (!pts.length) { ctx.fillText("collecting… (1 point per second)", padL + 10, top + 20); return; }
+  const bw = Math.max(1, (w - padL - 6) / (histWin * 60));
+  // hatch pattern for "still"
+  const pc = document.createElement("canvas"); pc.width = pc.height = 6;
+  const pctx = pc.getContext("2d"); pctx.strokeStyle = fg; pctx.lineWidth = 1.2; pctx.beginPath(); pctx.moveTo(0, 6); pctx.lineTo(6, 0); pctx.stroke();
+  const hatch = ctx.createPattern(pc, "repeat");
+  for (const [t, , mv, st] of pts) {
+    const x = X(t);
+    if (mv) { ctx.fillStyle = fg; ctx.fillRect(x, Y(mv), bw + 0.5, Y(0) - Y(mv)); }
+    if (st) { ctx.fillStyle = hatch; ctx.fillRect(x, Y(mv + st), bw + 0.5, Y(mv) - Y(mv + st)); }
+  }
+  ctx.strokeStyle = fg; ctx.lineWidth = 1.5; ctx.beginPath();
+  pts.forEach(([t, tot], i) => { const x = X(t), y = Y(tot); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+}
+
+// ------------------------------------------------------------------ auto-calibration
+$("#btnAutocal").onclick = async () => {
+  try { await api("/api/autocal", { json: { seconds: +$("#acSecs").value } }); toast("auto-calibration started - leave the room for 30 s"); }
+  catch (e) { toast(e.message); }
+};
+$("#btnAutocalStop").onclick = () => api("/api/autocal/cancel", { method: "POST" }).catch(() => {});
+let lastAcRender = null;
+function updateAutocal(s) {
+  const job = s.autocal, res = s.autocal_result;
+  $("#btnAutocal").disabled = !!job;
+  if (job) {
+    const left = Math.max(0, job.seconds - job.elapsed);
+    $("#acStatus").textContent = `listening · ${job.frames} frames · ${left.toFixed(0)} s left`;
+    $("#acProg").style.width = (100 * job.elapsed / job.seconds).toFixed(1) + "%";
+    $("#acResult").innerHTML = `<div class="note">${job.elapsed < 30 ? "Phase 1 - room empty or completely still (baseline)." : "Phase 2 - keep the nodes streaming; you may move around normally now."}</div>`;
+    lastAcRender = null;
+    return;
+  }
+  $("#acProg").style.width = res ? "100%" : "0%";
+  if (!res) { $("#acStatus").textContent = "idle"; return; }
+  if (lastAcRender === res.finished) return;
+  lastAcRender = res.finished;
+  $("#acStatus").textContent = "done · " + new Date(res.finished * 1000).toLocaleTimeString();
+  const sug = res.suggestion;
+  const rows = res.nodes.map((n) => n.ok
+    ? `<tr><td>node ${n.id}</td><td><b>${n.rate_hz}</b>/s</td><td><b>${n.rssi_dbm}</b> dBm</td><td>${n.calm_motion}</td><td>${n.link_m != null ? `<b>${n.link_m.toFixed(1)} m</b> ± ${sug ? sug.uncertainty_m.link : "?"}` : "—"}</td><td>baseline ✓ (from ${n.calm_from_s}s)</td></tr>`
+    : `<tr><td>node ${n.id}</td><td colspan="5" class="muted">${esc(n.reason)}</td></tr>`).join("");
+  let html = `<table class="tbl ac-table"><thead><tr><th>node</th><th>rate</th><th>rssi</th><th>noise</th><th>router distance (est.)</th><th>baseline</th></tr></thead><tbody>${rows}</tbody></table>`;
+  if (sug) {
+    html += `<div class="note">Rough suggested router position: <b>(${sug.router.x}, ${sug.router.y})</b> m. Distances are estimated mostly from signal strength (± ${sug.uncertainty_m.link} m on simulated rooms, usually worse on real hardware), so a tape-measured position is always better${sug.room_estimated ? ` · room ≈ <b>${sug.room.width} × ${sug.room.depth}</b> m ± ${sug.uncertainty_m.room}` : ""}.
+      ${sug.note ? `<br>${esc(sug.note)}` : ""} Direction can't be measured with a single board, so check the position on the floor map.</div>
+      <div class="row"><button class="btn" id="btnAcApply">APPLY ROUGH ROUTER POSITION</button><span class="muted">baselines were applied automatically</span></div>`;
+  }
+  $("#acResult").innerHTML = html;
+  const b = $("#btnAcApply");
+  if (b) b.onclick = async () => { try { await api("/api/autocal/apply", { method: "POST" }); toast("layout applied"); } catch (e) { toast(e.message); } };
+}
+
 // ------------------------------------------------------------------ websocket
 function applyConfig(cfg) {
   CFG = cfg;
@@ -692,7 +802,7 @@ function connect() {
       STATE = m;
       if (!CFG) return;
       if (m.udp.source === "sim") pill.lastChild.textContent = "SIM";
-      updateLive(m); updateCalib(m); updateTrain(m.training);
+      updateLive(m); updateCalib(m); updateTrain(m.training); updatePeople(m); updateAutocal(m);
       if (m.training.status === "done" && updateTrain.lastDone !== m.training.result.model) { updateTrain.lastDone = m.training.result.model; if (activeTab === "models") loadModels(); }
     }
   };

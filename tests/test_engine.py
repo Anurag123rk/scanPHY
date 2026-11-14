@@ -24,7 +24,7 @@ def test_engine_detects_presence_and_records(tmp_path):
     cfg = load_config(None)
     eng = Engine(cfg, ROOT, str(tmp_path), model_path="models/scanphy-base.npz")
     sim = LiveSimulator(cfg, rate=30)
-    sim.SCRIPT = [("empty", 12.0), ("moving", 1e9)]
+    sim.SCRIPT = [(0, 0, 12.0), (1, 0, 1e9)]
     t0 = time.time()
     st, t = run(eng, sim, 11.0, t0)
     assert all(n["alive"] for n in st["nodes"])

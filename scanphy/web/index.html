@@ -20,6 +20,7 @@
   </div>
   <nav class="tabs" id="tabs">
     <button data-tab="live" class="on">Live</button>
+    <button data-tab="people">People</button>
     <button data-tab="calibrate">Calibrate</button>
     <button data-tab="train">Train</button>
     <button data-tab="models">Models</button>
@@ -48,6 +49,7 @@
         <div><small>Y</small><b id="hudY">—</b></div>
         <div><small>ZONE</small><b id="hudZone">—</b></div>
         <div><small>CONF</small><b id="hudConf">—</b></div>
+        <div><small>PEOPLE</small><b id="hudPeople">0</b></div>
       </div>
       <div class="hud-tl" id="hudEngine">ENGINE —</div>
       <div class="hud-tr" id="hudTruth"></div>
@@ -57,6 +59,12 @@
       <div class="card presence">
         <div class="card-h"><span>OCCUPANCY</span><span class="spacer"></span><span class="muted" id="motionVal">motion —</span></div>
         <div class="presence-big" id="presenceBig">NO SIGNAL</div>
+        <div class="counts" id="countsLive">
+          <div><small>TOTAL</small><b id="cTotal">0</b></div>
+          <div><small>MOVING</small><b id="cMoving">0</b></div>
+          <div><small>STILL</small><b id="cStill">0</b></div>
+          <button class="chip" id="btnViewPeople">VIEW ›</button>
+        </div>
         <div class="bars" id="actBars"></div>
         <canvas class="spark" id="motionSpark" height="48"></canvas>
       </div>
@@ -83,8 +91,39 @@
   </div>
 </section>
 
+<!-- ================= PEOPLE ================= -->
+<section class="tab-page" id="page-people">
+  <div class="people-top">
+    <div class="card big-count"><small>PEOPLE IN ROOM</small><b id="pTotal">0</b><span class="muted" id="pTotalSub">—</span></div>
+    <div class="card big-count"><small>MOVING</small><b id="pMoving">0</b><div class="dist" id="pDistMove"></div></div>
+    <div class="card big-count"><small>STILL</small><b id="pStill">0</b><div class="dist" id="pDistStill"></div></div>
+    <div class="card big-count stats"><small>LAST <span id="pWin">10</span> MIN</small>
+      <div class="stat-row"><span>peak</span><b id="pPeak">0</b></div>
+      <div class="stat-row"><span>occupied</span><b id="pOcc">0%</b></div>
+      <div class="stat-row"><span>average</span><b id="pAvg">0</b></div></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><span>OCCUPANCY TIMELINE</span><span class="spacer"></span>
+      <span class="legend"><i class="sw sw1"></i>moving <i class="sw sw2"></i>still</span>
+      <button class="chip on" data-win="10">10 MIN</button><button class="chip" data-win="30">30 MIN</button><button class="chip" data-win="60">60 MIN</button></div>
+    <canvas id="peopleChart" class="chart"></canvas>
+  </div>
+  <div class="card log">
+    <div class="card-h"><span>COUNT CHANGES</span><span class="spacer"></span><span class="muted">counting is experimental · up to 3 people · more boards = better</span></div>
+    <ul id="peopleEvents"></ul>
+  </div>
+</section>
+
 <!-- ================= CALIBRATE ================= -->
 <section class="tab-page" id="page-calibrate">
+  <div class="card">
+    <div class="card-h"><span>AUTO-CALIBRATE</span><span class="spacer"></span><span class="muted" id="acStatus">idle</span></div>
+    <p class="muted">The nodes keep pinging the router, so WiFi frames flood the room continuously. scanPHY listens for a few minutes, picks the calmest stretch as the empty-room baseline, measures each link's noise and estimates how far the router is from each board. <b>Leave the room (or stay completely still) for at least the first 30 s.</b></p>
+    <div class="row"><label>duration <select id="acSecs"><option value="60">1 min</option><option value="120" selected>2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
+      <button class="btn" id="btnAutocal">START AUTO-CALIBRATION</button><button class="btn btn-ghost" id="btnAutocalStop">CANCEL</button></div>
+    <div class="progress big"><i id="acProg"></i></div>
+    <div id="acResult"></div>
+  </div>
   <div class="two">
     <div class="card">
       <div class="card-h"><span>CALIBRATION WIZARD</span></div>
@@ -115,6 +154,8 @@
       <canvas id="floorMap" class="floor"></canvas>
       <div class="row">
         <label>manual activity <select id="manAct"><option>still</option><option>moving</option><option>empty</option></select></label>
+        <label>people moving <input type="number" id="manMove" value="" min="0" max="3" placeholder="auto"></label>
+        <label>people still <input type="number" id="manStill" value="" min="0" max="3" placeholder="auto"></label>
         <label>seconds <input type="number" id="manSecs" value="10" min="3" max="120"></label>
         <button class="btn btn-ghost" id="btnManualFree">RECORD (NO POSITION)</button>
       </div>

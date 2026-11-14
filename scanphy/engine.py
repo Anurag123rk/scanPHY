@@ -12,7 +12,7 @@ from typing import Callable, Deque, Dict, List, Optional
 import numpy as np
 
 from . import config as cfgmod
-from . import vitals
+from . import autocal, vitals
 from .dataset import baseline_from_json, save_recording
 from .features import (ACTIVITIES, N_GROUPS, N_SLOTS, PER_NODE, amplitudes, geometry_features, link_disturbance,
                        make_baseline, motion_level, shape_profile, window_features)
@@ -106,6 +106,12 @@ class Engine:
         self._last_tick = time.time()
         self._last_vitals = 0.0
         self._still_since: Optional[float] = None
+        self.history: Deque[List[float]] = deque(maxlen=3600)  # 1 Hz for an hour: t, total, moving, still
+        self._last_hist = 0.0
+        self.autocal_job: Optional[Dict] = None
+        self.autocal_result: Optional[Dict] = None
+        geo = os.path.join(root, "models", "geometry.npz")
+        self.geometry = autocal.GeometryEstimator(geo) if os.path.exists(geo) else None
         self.vitals: Dict = {"breathing_bpm": None, "breathing_conf": 0.0, "heart_bpm": None, "heart_conf": 0.0}
 
     # ---- configuration ------------------------------------------------------------------
@@ -131,6 +137,9 @@ class Engine:
         self.trail: Deque[List[float]] = deque(maxlen=60)
         self.zone_probs: Optional[np.ndarray] = None
         self.confidence = 0.0
+        self.count_probs = (np.eye(4)[0].copy(), np.eye(4)[0].copy())  # (moving, still) over 0..3
+        self.people = {"total": 0, "moving": 0, "still": 0}
+        self._people_candidate = (dict(self.people), 0.0)
 
     def log(self, msg: str, level: str = "info") -> None:
         self.events.appendleft({"t": time.time(), "msg": msg, "level": level})
@@ -205,6 +214,37 @@ class Engine:
         else:
             self.log("baseline failed: no CSI received", "warn")
 
+    # ---- automatic calibration ------------------------------------------------------------
+    def start_autocal(self, seconds: float = 120.0) -> None:
+        if self.autocal_job is not None:
+            raise RuntimeError("auto-calibration already running")
+        now = time.time()
+        self.autocal_job = {"start": now, "end": now + float(seconds), "seconds": float(seconds), "slots": {}}
+        self.autocal_result = None
+        self.log("auto-calibration started (%.0f s) - keep the room empty or still for at least 30 s" % seconds)
+
+    def cancel_autocal(self) -> None:
+        if self.autocal_job is not None:
+            self.autocal_job = None
+            self.log("auto-calibration cancelled", "warn")
+
+    def _finish_autocal(self) -> None:
+        job = self.autocal_job
+        self.autocal_job = None
+        res = autocal.analyse(self.cfg, job["slots"], self.geometry)
+        for nid, b in res.pop("baselines").items():
+            self.baselines[nid] = b
+            self.baseline_auto[nid] = False
+        self._save_baselines()
+        ok = [n for n in res["nodes"] if n.get("ok")]
+        res["finished"] = time.time()
+        self.autocal_result = res
+        if ok:
+            self.log("auto-calibration done: baseline set for %d node(s)%s" % (
+                len(ok), ", router ~%.1f m from node %d" % (ok[0]["link_m"], ok[0]["id"]) if "link_m" in ok[0] else ""))
+        else:
+            self.log("auto-calibration failed: no CSI received", "warn")
+
     # ---- recording ----------------------------------------------------------------------
     def start_recording(self, label: Dict, seconds: float) -> Dict:
         if self.recording is not None:
@@ -255,6 +295,11 @@ class Engine:
         buf.addr = addr or buf.addr
         buf.channel, buf.n_sc = channel, n_sc
         buf.push(t, amp, rssi, seq)
+        if self.autocal_job is not None:
+            a = self.autocal_job["slots"].setdefault(buf.id, {"t": [], "amp": [], "rssi": []})
+            a["t"].append(t)
+            a["amp"].append(amp.astype(np.float16))
+            a["rssi"].append(float(rssi))
         if self.recording is not None:
             s = self.recording["slots"][buf.slot]
             s["t"].append(t)
@@ -306,6 +351,8 @@ class Engine:
             self._finish_baseline(now)
         if self.recording and now >= self.recording["end"]:
             self._finish_recording()
+        if self.autocal_job and now >= self.autocal_job["end"]:
+            self._finish_autocal()
 
         win = self.cfg["window_s"]
         slots, bls, valid = [], [], []
@@ -334,12 +381,15 @@ class Engine:
             if self.model is not None:
                 pred = self.model.predict(vec)
                 probs, zp, xy = pred["activity"][0], pred["zone"][0], pred["xy"][0]
+                counts = (pred["n_move"][0], pred["n_still"][0])
                 engine_kind = "model"
             else:
                 probs, zp, xy = self._heuristic(vec, valid)
+                counts = (np.array([probs[0] + probs[1], probs[2], 0, 0]), np.array([probs[0] + probs[2], probs[1], 0, 0]))
                 engine_kind = "heuristic"
             a = min(1.0, dt / 0.35)
             self.act_probs = (1 - a) * self.act_probs + a * probs
+            self.count_probs = tuple((1 - a) * cp + a * np.asarray(c) for cp, c in zip(self.count_probs, counts))
             p_present = 1.0 - self.act_probs[0]
             if not self.presence and p_present > 0.6:
                 self.presence = True
@@ -381,6 +431,7 @@ class Engine:
             motion = 0.0
 
         activity = ACTIVITIES[int(np.argmax(self.act_probs))] if any(valid) else "no-signal"
+        self._update_people(now, activity)
         if activity != "still":
             self._still_since = None
         elif self._still_since is None:
@@ -410,6 +461,36 @@ class Engine:
                 best = v
         if best is not None:
             self.vitals = best
+
+    def _update_people(self, now: float, activity: str) -> None:
+        """Debounced people counts (moving / still / total) + 1 Hz history."""
+        if not self.presence:
+            cand = {"total": 0, "moving": 0, "still": 0}
+        else:
+            mv = int(np.argmax(self.count_probs[0]))
+            st = int(np.argmax(self.count_probs[1]))
+            if mv + st == 0:  # model unsure about the count but someone is there
+                mv, st = (1, 0) if activity == "moving" else (0, 1)
+            cand = {"total": mv + st, "moving": mv, "still": st}
+        if cand != self._people_candidate[0]:
+            self._people_candidate = (cand, now)
+        elif cand != self.people and now - self._people_candidate[1] > 2.0:
+            self.people = cand
+            self.log("people: %d (%d moving, %d still)" % (cand["total"], cand["moving"], cand["still"]))
+        if now - self._last_hist >= 1.0:
+            self._last_hist = now
+            p = self.people
+            self.history.append([round(now, 1), p["total"], p["moving"], p["still"]])
+
+    def history_summary(self, minutes: float = 10.0) -> Dict:
+        now = time.time()
+        pts = [h for h in self.history if h[0] >= now - minutes * 60]
+        if not pts:
+            return {"points": [], "peak": 0, "occupied_pct": 0.0, "avg_people": 0.0, "minutes": minutes}
+        tot = np.array([h[1] for h in pts], dtype=np.float32)
+        return {"points": pts, "peak": int(tot.max()), "occupied_pct": round(float((tot > 0).mean() * 100), 1),
+                "avg_people": round(float(tot.mean()), 2), "minutes": minutes,
+                "peak_moving": int(max(h[2] for h in pts)), "peak_still": int(max(h[3] for h in pts))}
 
     def _state(self, now: float, activity: str, motion: float, engine_kind: str) -> Dict:
         nodes = []
@@ -470,4 +551,11 @@ class Engine:
             "model": self.model.info() if self.model else {"name": None, "error": self.model_error},
             "truth": self.truth,
             "events": list(self.events)[:25],
+            "people": dict(self.people,
+                           p_moving=[round(float(v), 3) for v in self.count_probs[0]],
+                           p_still=[round(float(v), 3) for v in self.count_probs[1]]),
+            "autocal": ({"elapsed": round(now - self.autocal_job["start"], 1), "seconds": self.autocal_job["seconds"],
+                         "frames": sum(len(v["t"]) for v in self.autocal_job["slots"].values())}
+                        if self.autocal_job else None),
+            "autocal_result": self.autocal_result,
         }

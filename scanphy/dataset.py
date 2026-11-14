@@ -88,7 +88,7 @@ def list_recordings(directory: str) -> List[Dict]:
 def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
     """Slice a recording into labelled feature windows.
 
-    Returns (X, activity, xy_norm, has_xy, zone, dims) or None if unusable.
+    Returns a dict (X, act, xy, hx, zone, dims, n_move, n_still) or None if unusable.
     """
     with np.load(path, allow_pickle=False) as z:
         meta = json.loads(str(z["meta"]))
@@ -101,7 +101,11 @@ def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
         return None
     W, D = cfg["room"]["width"], cfg["room"]["depth"]
     rows, cols = cfg["zones"]["rows"], cfg["zones"]["cols"]
-    has_xy = label.get("x") is not None and label.get("y") is not None and act_name != "empty"
+    default_counts = {"empty": (0, 0), "still": (0, 1), "moving": (1, 0)}[act_name]
+    n_move = int(label.get("moving_count", default_counts[0]) or 0)
+    n_still = int(label.get("still_count", default_counts[1]) or 0)
+    has_xy = label.get("x") is not None and label.get("y") is not None and act_name != "empty" \
+        and n_move + n_still == 1
     xn = (float(label["x"]) / W, float(label["y"]) / D) if has_xy else (0.0, 0.0)
     baselines = [baseline_from_json(b) for b in meta.get("baselines", [])] + [None] * N_SLOTS
     geom = geometry_features(cfg)
@@ -134,20 +138,20 @@ def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
     hx = np.full(n, has_xy, dtype=bool)
     zone = np.full(n, cfgmod.zone_index(xn[0], xn[1], rows, cols) if has_xy else 0, dtype=np.int64)
     dims = np.tile(np.array([W, D], dtype=np.float32), (n, 1))
-    return X, act, xy, hx, zone, dims
+    return {"X": X, "act": act, "xy": xy, "hx": hx, "zone": zone, "dims": dims,
+            "n_move": np.full(n, min(n_move, 3), dtype=np.int64),
+            "n_still": np.full(n, min(n_still, 3), dtype=np.int64)}
 
 
-def load_all(directory: str, window_s: float = 1.0, hop_s: float = 0.25):
-    """All recordings -> stacked arrays plus a recording index per window (for val split)."""
-    parts, groups = [], []
+def load_all(directory: str, window_s: float = 1.0, hop_s: float = 0.25) -> Optional[Dict[str, np.ndarray]]:
+    """All recordings -> dict of stacked arrays, plus "group" = recording index (for the val split)."""
+    parts = []
     for i, meta in enumerate(list_recordings(directory)):
         r = recording_windows(os.path.join(directory, meta["file"]), window_s, hop_s)
         if r is None:
             continue
+        r["group"] = np.full(len(r["X"]), i, dtype=np.int64)
         parts.append(r)
-        groups.append(np.full(len(r[0]), i, dtype=np.int64))
     if not parts:
         return None
-    cat = [np.concatenate([p[j] for p in parts]) for j in range(6)]
-    return cat + [np.concatenate(groups)]
-
+    return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
