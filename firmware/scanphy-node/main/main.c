@@ -172,6 +172,8 @@ static void sender_task(void *arg)
     int sock = -1;
     packet_t pkt;
     int64_t last_log = esp_timer_get_time();
+    /* lwIP must be up before any socket call: wait until WiFi has an IP address. */
+    while (!s_connected) vTaskDelay(pdMS_TO_TICKS(100));
     for (;;) {
         if (sock < 0) {
             sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -270,6 +272,6 @@ void app_main(void)
     ESP_LOGI(TAG, "scanPHY node firmware starting");
     load_config();
     s_queue = xQueueCreate(QUEUE_DEPTH, sizeof(packet_t));
+    wifi_init();  /* initialises esp_netif / lwIP first */
     xTaskCreatePinnedToCore(sender_task, "scanphy_tx", 4096, NULL, 5, NULL, 1);
-    wifi_init();
 }
