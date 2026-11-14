@@ -24,6 +24,6 @@ def test_builtin_model_per_board_count(n):
     d = synth_dataset(400, seed=4321, cfg=validate(cfg), n_active=n)
     p = m.predict(d["X"])
     assert np.allclose(p["activity"].sum(1), 1, atol=1e-5)
-    assert p["n_move"].shape == (400, 4)
+    assert p["n_move"].shape == (len(d["X"]), 4)
     presence = ((p["activity"].argmax(1) > 0) == (d["act"] > 0)).mean()
     assert presence > MIN_PRESENCE[n]
