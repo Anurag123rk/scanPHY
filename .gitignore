@@ -13,3 +13,5 @@ models/room-*
 config/room.json
 models/*.tmp.npz
 .venv/
+# personal setup notes (contain WiFi credentials) - never commit
+MY_SCANPHY_SETUP.txt
