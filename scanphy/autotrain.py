@@ -69,15 +69,20 @@ class AutoTrainer:
         name = time.strftime("room-%Y%m%d-%H%M%S.npz")
         self.out_path = os.path.join(self.models_dir, name)
         init = cfg.get("model")
-        init_path = init if (init and os.path.isabs(init)) else os.path.join(self.root, init or "")
+        n_nodes = len(cfg["nodes"])
+        if not init or init == "auto" or not os.path.exists(init if os.path.isabs(init) else os.path.join(self.root, init)):
+            init = os.path.join("models", "scanphy-%dnode.npz" % n_nodes)
+        init_path = init if os.path.isabs(init) else os.path.join(self.root, init)
         args = [sys.executable, "-m", "scanphy", "train", "--json-progress", "--onnx",
                 "--config", self.config_path, "--out", self.out_path, "--epochs", str(epochs),
                 "--synthetic", str(int(synthetic) if cfg.get("autotrain", {}).get("mix_synthetic", True) or not has_rec
                                    else 0)]
         if has_rec:
             args += ["--recordings", self.recordings_dir]
-        if init and os.path.exists(init_path):
+        if os.path.exists(init_path):
             args += ["--init", init_path]
+        else:
+            args += ["--nodes", str(n_nodes)]
         self.status, self.epoch, self.epochs, self.history = "running", 0, epochs, []
         self.result, self.reason, self.started = None, reason, time.time()
         self.lines.clear()

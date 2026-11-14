@@ -26,8 +26,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "zones": {"rows": 3, "cols": 3},
     # Sliding window (seconds) used for every inference.
     "window_s": 1.0,
-    # Model file (relative to the project root) loaded at start-up.
-    "model": "models/scanphy-base.npz",
+    # Model file (relative to the project root), or "auto" = the built-in model for the
+    # number of boards currently streaming (models/scanphy-<n>node.npz).
+    "model": "auto",
     # Optional GLB model of the room (served from data/ or an absolute URL).
     "room_glb": None,
     "autotrain": {"enabled": True, "epochs": 60, "mix_synthetic": True},

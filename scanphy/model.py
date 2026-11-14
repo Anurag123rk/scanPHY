@@ -20,7 +20,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from .features import ACTIVITIES, FEATURE_DIM, FEATURE_VERSION
+from .features import ACTIVITIES, FEATURE_DIM, FEATURE_VERSION, GEOM_DIM, N_SLOTS, PER_NODE, SHORT_DIM
 
 LAYER_KEYS = ["l0.w", "l0.b", "n0.w", "n0.b", "l1.w", "l1.b", "n1.w", "n1.b", "l2.w", "l2.b",
               "act.w", "act.b", "zone.w", "zone.b", "xy.w", "xy.b"]
@@ -52,10 +52,14 @@ class ScanModel:
             self.has_counts = all(k in z.files for k in COUNT_KEYS)
             if self.has_counts:
                 self.p.update({k: z[k].astype(np.float32) for k in COUNT_KEYS})
-        if self.meta.get("feature_version") != FEATURE_VERSION:
+        version = self.meta.get("feature_version")
+        # Version-3 models (1 s features only) still run: their inputs are the short-window
+        # block of every node plus the geometry, i.e. a fixed subset of today's features.
+        self.legacy = version == 3 and self.mu.shape[0] == N_SLOTS * SHORT_DIM + GEOM_DIM
+        if not self.legacy and version != FEATURE_VERSION:
             raise ValueError("model %s was trained for feature version %s (runtime is %s)"
-                             % (path, self.meta.get("feature_version"), FEATURE_VERSION))
-        if self.mu.shape[0] != FEATURE_DIM:
+                             % (path, version, FEATURE_VERSION))
+        if not self.legacy and self.mu.shape[0] != FEATURE_DIM:
             raise ValueError("model input size %d != %d" % (self.mu.shape[0], FEATURE_DIM))
         self.zone_rows = int(self.meta["zones"]["rows"])
         self.zone_cols = int(self.meta["zones"]["cols"])
@@ -69,6 +73,10 @@ class ScanModel:
 
     def predict(self, x: np.ndarray) -> Dict[str, np.ndarray]:
         x = np.atleast_2d(np.asarray(x, dtype=np.float32))
+        if self.legacy:
+            idx = np.concatenate([np.arange(i * PER_NODE, i * PER_NODE + SHORT_DIM) for i in range(N_SLOTS)] +
+                                 [np.arange(N_SLOTS * PER_NODE, N_SLOTS * PER_NODE + GEOM_DIM)])
+            x = x[:, idx]
         h = (x - self.mu) / self.sigma
         h = np.maximum(_ln(self._lin(h, "l0"), self.p["n0.w"], self.p["n0.b"]), 0)
         h = np.maximum(_ln(self._lin(h, "l1"), self.p["n1.w"], self.p["n1.b"]), 0)

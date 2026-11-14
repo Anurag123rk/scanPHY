@@ -22,7 +22,7 @@ def run(engine, sim, seconds, t0):
 
 def test_engine_detects_presence_and_records(tmp_path):
     cfg = load_config(None)
-    eng = Engine(cfg, ROOT, str(tmp_path), model_path="models/scanphy-base.npz")
+    eng = Engine(cfg, ROOT, str(tmp_path), model_path="auto")
     sim = LiveSimulator(cfg, rate=30)
     sim.SCRIPT = [(0, 0, 12.0), (1, 0, 1e9)]
     t0 = time.time()

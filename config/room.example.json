@@ -38,7 +38,7 @@
     "cols": 3
   },
   "window_s": 1.0,
-  "model": "models/scanphy-base.npz",
+  "model": "auto",
   "room_glb": null,
   "autotrain": {
     "enabled": true,

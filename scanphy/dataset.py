@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from . import config as cfgmod
-from .features import (ACTIVITIES, N_SLOTS, geometry_features, shape_profile, window_features)
+from .features import (ACTIVITIES, LONG_S, MIN_FRAMES, N_SLOTS, SHORT_S, geometry_features, shape_profile, window_features)
 
 
 def _baseline_to_json(b: Optional[Dict]) -> Optional[Dict]:
@@ -85,7 +85,7 @@ def list_recordings(directory: str) -> List[Dict]:
     return out
 
 
-def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
+def recording_windows(path: str, window_s: float = LONG_S, hop_s: float = 0.25):
     """Slice a recording into labelled feature windows.
 
     Returns a dict (X, act, xy, hx, zone, dims, n_move, n_still) or None if unusable.
@@ -117,7 +117,7 @@ def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
     t0 = min(float(t[0]) for t in times)
     t1 = max(float(t[-1]) for t in times)
     feats = []
-    t = t0 + window_s
+    t = t0 + SHORT_S
     while t <= t1 + 1e-6:
         win = []
         for s in slots:
@@ -125,7 +125,9 @@ def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
                 win.append(None)
                 continue
             m = (s["t"] > t - window_s) & (s["t"] <= t)
-            win.append({"profiles": s["prof"][m], "rssi": s["rssi"][m]} if m.sum() >= 5 else None)
+            recent = int(((s["t"] > t - SHORT_S) & (s["t"] <= t)).sum())
+            win.append({"profiles": s["prof"][m], "rssi": s["rssi"][m], "t": s["t"][m]}
+                       if recent >= MIN_FRAMES else None)
         if any(w is not None for w in win):
             feats.append(window_features(win, baselines[:N_SLOTS], geom))
         t += hop_s
@@ -143,7 +145,7 @@ def recording_windows(path: str, window_s: float = 1.0, hop_s: float = 0.25):
             "n_still": np.full(n, min(n_still, 3), dtype=np.int64)}
 
 
-def load_all(directory: str, window_s: float = 1.0, hop_s: float = 0.25) -> Optional[Dict[str, np.ndarray]]:
+def load_all(directory: str, window_s: float = LONG_S, hop_s: float = 0.25) -> Optional[Dict[str, np.ndarray]]:
     """All recordings -> dict of stacked arrays, plus "group" = recording index (for the val split)."""
     parts = []
     for i, meta in enumerate(list_recordings(directory)):

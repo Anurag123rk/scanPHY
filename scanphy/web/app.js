@@ -630,6 +630,10 @@ async function loadModels() {
         <td>${esc(m.device || "")}</td><td>${m.active ? '<span class="pill live">ACTIVE</span>' : `<button class="chip" data-act="${esc(m.file)}">ACTIVATE</button>`}
         <a class="chip" href="/api/models/${encodeURIComponent(m.file)}">DOWNLOAD</a>${m.active ? "" : ` <button class="chip danger" data-mdel="${esc(m.file)}">DELETE</button>`}</td></tr>`;
     }).join("") || `<tr><td colspan="8" class="muted">no models yet</td></tr>`;
+    const auto = ms.length && ms[0].auto;
+    $("#modelTable tbody").insertAdjacentHTML("afterbegin", `<tr class="${auto ? "active" : ""}"><td>AUTO</td>
+      <td colspan="6" class="muted">uses scanphy-1node / 2node / 3node to match the number of boards streaming right now</td>
+      <td>${auto ? '<span class="pill live">ACTIVE</span>' : '<button class="chip" data-act="auto">USE AUTO</button>'}</td></tr>`);
     document.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => { try { await api("/api/models/activate", { json: { file: b.dataset.act } }); toast("model activated"); loadModels(); } catch (e) { toast(e.message); } });
     document.querySelectorAll("[data-mdel]").forEach((b) => b.onclick = async () => { if (confirm("Delete " + b.dataset.mdel + "?")) { await api("/api/models/" + encodeURIComponent(b.dataset.mdel), { method: "DELETE" }); loadModels(); } });
   } catch (e) { /* offline */ }

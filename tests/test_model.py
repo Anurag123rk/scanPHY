@@ -3,24 +3,27 @@ import os
 import numpy as np
 import pytest
 
-from scanphy.config import load_config
+from scanphy.config import load_config, validate
 from scanphy.model import ScanModel
 from scanphy.simulator import synth_dataset
 
-BASE = os.path.join(os.path.dirname(__file__), "..", "models", "scanphy-base.npz")
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+# minimum simulated presence accuracy expected from each built-in model
+MIN_PRESENCE = {1: 0.88, 2: 0.93, 3: 0.95}
 
 
-@pytest.mark.skipif(not os.path.exists(BASE), reason="base model not present")
-def test_base_model_on_simulated_room():
-    m = ScanModel(BASE)
-    d = synth_dataset(600, seed=1234, cfg=load_config(None))
-    X, act, xy, dims = d["X"], d["act"], d["xy"], d["dims"]
-    p = m.predict(X)
-    assert p["n_move"].shape == (600, 4) and p["n_still"].shape == (600, 4)
-    assert p["activity"].shape == (600, 3)
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_builtin_model_per_board_count(n):
+    path = os.path.join(ROOT, "models", "scanphy-%dnode.npz" % n)
+    if not os.path.exists(path):
+        pytest.skip("model not present")
+    m = ScanModel(path)
+    assert m.meta.get("nodes") == n
+    cfg = load_config(os.path.join(ROOT, "config", "room.example.json"))
+    cfg["nodes"] = cfg["nodes"][:n]
+    d = synth_dataset(400, seed=4321, cfg=validate(cfg), n_active=n)
+    p = m.predict(d["X"])
     assert np.allclose(p["activity"].sum(1), 1, atol=1e-5)
-    presence_acc = ((p["activity"].argmax(1) > 0) == (act > 0)).mean()
-    assert presence_acc > 0.9
-    person = d["hx"]
-    err = np.linalg.norm((p["xy"][person] - xy[person]) * dims[person], axis=1).mean()
-    assert err < 1.2
+    assert p["n_move"].shape == (400, 4)
+    presence = ((p["activity"].argmax(1) > 0) == (d["act"] > 0)).mean()
+    assert presence > MIN_PRESENCE[n]

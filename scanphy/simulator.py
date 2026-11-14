@@ -21,8 +21,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from . import config as cfgmod
-from .features import (ACTIVITIES, FEATURE_DIM, N_SLOTS, amplitudes, geometry_features, make_baseline,
-                       shape_profile, window_features)
+from .features import (ACTIVITIES, FEATURE_DIM, LONG_S, N_SLOTS, SHORT_S, amplitudes, geometry_features,
+                       make_baseline, shape_profile, window_features)
 
 C = 299_792_458.0
 SC_SPACING = 312.5e3
@@ -269,9 +269,11 @@ def _sample_counts(rng: np.random.Generator) -> Tuple[int, int]:
     return n_move, total - n_move
 
 
-def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0, 60.0),
-                        window_s: float = 1.0) -> Dict[str, np.ndarray]:
-    """Generate `n` labelled windows from one random scene."""
+def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(10.0, 50.0),
+                        window_s: float = LONG_S, n_active: Optional[int] = None) -> Dict[str, np.ndarray]:
+    """Generate `n` labelled windows from one random scene.
+
+    n_active: exact number of boards streaming in every sample (None = random 1..all)."""
     rng = np.random.default_rng(seed)
     layout = cfg if cfg is not None else random_layout(rng)
     scene = Scene(layout, rng, channel=int(rng.choice([1, 6, 11])))
@@ -309,24 +311,27 @@ def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0
             people.append((pos, chest, scene.random_body()))
         # Node-count dropout: the model must also work with 1 or 2 boards (or a board offline).
         r_nodes = rng.random()
-        if r_nodes < 0.15 and n_nodes > 1:
+        if n_active is not None:
+            active = set(rng.choice(n_nodes, size=min(n_active, n_nodes), replace=False).tolist())
+        elif r_nodes < 0.15 and n_nodes > 1:
             active = {int(rng.integers(0, n_nodes))}
         elif r_nodes < 0.30 and n_nodes > 2:
             active = set(rng.choice(n_nodes, size=2, replace=False).tolist())
         else:
             active = set(range(n_nodes))
+        tt = np.arange(T) / rate
         slots = []
         for k in range(N_SLOTS):
-            if k not in active or rng.random() < 0.03:
+            if k not in active or (n_active is None and rng.random() < 0.03):
                 slots.append(None)
                 continue
             iq, rssi = scene.quantize(k, scene.channel(k, people, T))
-            slots.append({"profiles": shape_profile(amplitudes(iq)), "rssi": rssi})
+            slots.append({"profiles": shape_profile(amplitudes(iq)), "rssi": rssi, "t": tt})
         out["X"][i] = window_features(slots, baselines + [None] * (N_SLOTS - n_nodes), geom)
         out["act"][i] = 0 if not people else (2 if n_move else 1)
         out["n_move"][i], out["n_still"][i] = n_move, n_still
         if len(people) == 1:  # position labels only make sense for a single person
-            m = people[0][0].mean(axis=0)
+            m = people[0][0][tt > tt[-1] - SHORT_S].mean(axis=0)  # where they are *now*
             out["xy"][i] = (m[0] / W, m[1] / D)
             out["hx"][i] = True
             out["zone"][i] = cfgmod.zone_index(out["xy"][i, 0], out["xy"][i, 1], rows, cols)
@@ -334,17 +339,17 @@ def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0
 
 
 def _worker(args):
-    cfg, n, seed = args
-    return synth_scene_samples(cfg, n, seed)
+    cfg, n, seed, n_active = args
+    return synth_scene_samples(cfg, n, seed, n_active=n_active)
 
 
 def synth_dataset(n_samples: int, seed: int = 0, cfg: Optional[Dict] = None, per_scene: int = 24,
-                  workers: int = 0):
+                  workers: int = 0, n_active: Optional[int] = None):
     """Domain-randomised synthetic dataset -> dict of arrays (see synth_scene_samples).
 
     If cfg is given its geometry is kept fixed (wall materials/clutter still vary)."""
     n_scenes = max(1, n_samples // per_scene)
-    jobs = [(cfg, per_scene, seed * 100003 + s) for s in range(n_scenes)]
+    jobs = [(cfg, per_scene, seed * 100003 + s, n_active) for s in range(n_scenes)]
     if workers and workers > 1:
         import multiprocessing as mp
         with mp.get_context("spawn").Pool(workers) as pool:

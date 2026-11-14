@@ -43,6 +43,7 @@ scanphy/            Python package (runs on the Jetson)
   engine.py           live pipeline: buffers → features → model → tracker → vitals
   features.py         feature extraction (shared by inference and training)
   model.py            NumPy-only inference runtime (no PyTorch needed to run)
+  autocal.py          automatic calibration (baseline, link health, rough router distance)
   trainer.py          PyTorch trainer (CUDA on Jetson), ONNX export
   autotrain.py        background training + hot model swap
   simulator.py        physics-based multipath CSI simulator (training + demo)
@@ -50,7 +51,8 @@ scanphy/            Python package (runs on the Jetson)
   web/                dashboard (vanilla JS + three.js, works offline)
 firmware/scanphy-node/  ESP-IDF firmware for the ESP32-S3 nodes
 tools/              provision.py / flash_nodes.py (flash + configure boards)
-models/             scanphy-base.npz (pretrained) + .onnx
+models/             scanphy-1node / 2node / 3node.npz (pretrained per board count) + .onnx,
+                    geometry.npz (router-distance estimator)
 scripts/            Jetson setup, PyTorch installer, systemd unit
 ```
 
@@ -125,11 +127,12 @@ result on the Jetson:
 
 ```bash
 pip install -r requirements.txt -r requirements-train.txt
-# generic base model (synthetic data):
-python -m scanphy train --synthetic 150000 --config config/room.example.json --epochs 60 --onnx --out models/my-base.npz
+# model for a given number of boards (synthetic data):
+python -m scanphy train --nodes 3 --hidden 384 --synthetic 200000 --config config/room.example.json \
+    --epochs 70 --onnx --out models/my-3node.npz
 # fine-tune on recordings copied from the Jetson (data/recordings/):
 python -m scanphy train --recordings data/recordings --config config/room.json \
-    --init models/scanphy-base.npz --epochs 60 --onnx --out models/my-room.npz
+    --init models/scanphy-3node.npz --epochs 60 --onnx --out models/my-room.npz
 ```
 
 Then **Models → Upload .npz** in the dashboard, or copy the file into `models/` on the Jetson and click **Activate**.
@@ -152,10 +155,14 @@ UDP, and `probe` to list which boards are streaming.
 
 1. **Firmware.** Each node pings the router at about 50 Hz and captures CSI (64 LLTF subcarriers) from every frame the
    router sends back. It streams that CSI to the Jetson over UDP.
-2. **Features.** For each 1 s window and each node, scanPHY computes a gain-invariant log-amplitude profile across
-   13 subcarrier bands. It measures how far that profile deviates from an empty-room baseline and how much it varies
-   over time, and adds RSSI and the node/router geometry. That gives 98 values in total.
-3. **Model.** A 3-layer MLP with LayerNorm has three output heads: activity (3 classes), zone (rows×cols) and x/y.
+2. **Features.** For each node, scanPHY computes a gain-invariant log-amplitude profile across 13 subcarrier bands.
+   Over the last 1 s it measures how far that profile deviates from an empty-room baseline, how much it varies,
+   and RSSI. Over the last 4 s it adds slow variation per band and how much of the signal lies in the breathing
+   band (0.15–0.6 Hz) versus the walking band (0.6–2.5 Hz). With the node/router geometry, that gives 149 values.
+3. **Model.** A 3-layer MLP with LayerNorm has five output heads: activity (3 classes), zone (rows×cols), x/y,
+   and people counts (0–3 moving, 0–3 still). There is one built-in model per board count (1, 2 and 3 boards).
+   In `"model": "auto"` mode (the default), scanPHY picks the one that matches how many boards are streaming
+   right now, so it keeps working when a board drops out.
    The base model is pre-trained on a physics simulator: line-of-sight and wall/floor/ceiling reflections, body
    scattering and blocking, breathing, and radio impairments, over randomised rooms. It is then fine-tuned on your own
    recordings.

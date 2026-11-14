@@ -169,7 +169,7 @@ def train(args) -> int:
         for n, c, seed in ((n_generic, None, args.seed), (n_room, cfg, args.seed + 1)):
             if n <= 0:
                 continue
-            d = synth_dataset(n, seed=seed, cfg=c, workers=args.workers)
+            d = synth_dataset(n, seed=seed, cfg=c, workers=args.workers, n_active=args.nodes)
             if c is None and (rows, cols) != (3, 3):
                 d["zone"] = np.array([cfgmod.zone_index(a, b, rows, cols) for a, b in d["xy"]], dtype=np.int64)
             d["w"] = np.ones(len(d["X"]), np.float32)
@@ -177,7 +177,7 @@ def train(args) -> int:
             parts.append((d, False))
     n_real = 0
     if args.recordings:
-        real = load_all(args.recordings, window_s=1.0, hop_s=args.hop)
+        real = load_all(args.recordings, hop_s=args.hop)
         if real is None:
             emit(progress, event="log", message="no usable recordings in %s" % args.recordings)
         else:
@@ -213,7 +213,12 @@ def train(args) -> int:
     tr = {k: np.concatenate([s[0][0][k] for s in splits]) for k in KEYS + ("w",)}
     val_sets = {("real" if r else "synthetic"): s[1] for s, r in splits if len(s[1]["X"])}
 
-    net = Net(FEATURE_DIM, rows * cols).to(device)
+    if args.init and os.path.exists(args.init):
+        with np.load(args.init, allow_pickle=False) as z:  # fine-tuning keeps the parent's width
+            args.hidden = int(z["l0.w"].shape[0])
+            if args.nodes is None:
+                args.nodes = json.loads(str(z["meta"])).get("nodes")
+    net = Net(FEATURE_DIM, rows * cols, hidden=args.hidden).to(device)
     if args.init and os.path.exists(args.init):
         mu, sigma, _ = _load_init(net, args.init)
         emit(progress, event="log", message="fine-tuning from %s" % os.path.basename(args.init))
@@ -273,6 +278,8 @@ def train(args) -> int:
     _, state, vals, best_epoch = best
     meta = {
         "kind": "room" if n_real else ("layout" if cfg else "generic"),
+        "nodes": args.nodes,
+        "hidden": args.hidden,
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "zones": {"rows": rows, "cols": cols},
         "metrics": vals,
@@ -319,6 +326,9 @@ def add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lr", type=float, default=0.0)
     p.add_argument("--hop", type=float, default=0.2, help="window hop (s) when slicing recordings")
     p.add_argument("--real-weight", type=float, default=3.0, help="loss weight of real vs synthetic windows")
+    p.add_argument("--nodes", type=int, default=None, choices=[1, 2, 3],
+                   help="specialise for exactly this many boards (default: mixed 1-3)")
+    p.add_argument("--hidden", type=int, default=256, help="hidden layer width")
     p.add_argument("--device", default="auto")
     p.add_argument("--workers", type=int, default=max(1, min(8, (os.cpu_count() or 2) - 1)))
     p.add_argument("--seed", type=int, default=0)

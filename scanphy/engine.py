@@ -14,7 +14,7 @@ import numpy as np
 from . import config as cfgmod
 from . import autocal, vitals
 from .dataset import baseline_from_json, save_recording
-from .features import (ACTIVITIES, N_GROUPS, N_SLOTS, PER_NODE, amplitudes, geometry_features, link_disturbance,
+from .features import (ACTIVITIES, LONG_S, N_GROUPS, N_SLOTS, PER_NODE, amplitudes, geometry_features, link_disturbance,
                        make_baseline, motion_level, shape_profile, window_features)
 from .model import ScanModel, try_load
 from .protocol import CsiFrame
@@ -145,29 +145,71 @@ class Engine:
         self.events.appendleft({"t": time.time(), "msg": msg, "level": level})
 
     # ---- model --------------------------------------------------------------------------
+    def _load_specialists(self) -> None:
+        """Per-board-count models (models/scanphy-<n>node.npz), used in "auto" mode and as fallback."""
+        self.specialists: Dict[int, ScanModel] = {}
+        for n in (1, 2, 3):
+            path = os.path.join(self.root, "models", "scanphy-%dnode.npz" % n)
+            try:
+                m = try_load(path)
+            except Exception as exc:
+                self.log("specialist model %s unusable: %s" % (os.path.basename(path), exc), "warn")
+                continue
+            if m is not None:
+                self.specialists[n] = m
+        # General model used when no per-board-count model is available.
+        self.general: Optional[ScanModel] = None
+        try:
+            self.general = try_load(os.path.join(self.root, "models", "scanphy-base.npz"))
+        except Exception:
+            self.general = None
+
     def load_model(self, path: Optional[str]) -> bool:
-        if not path:
-            self.model = None
-            return False
+        """Load the primary model. "auto" (or a missing/incompatible file) = pick a specialist
+        model by the number of boards currently streaming."""
+        self._load_specialists()
+        self.model = None
+        self.model_error = None
+        if not path or path == "auto":
+            names = ["%d-board" % n for n in sorted(self.specialists)] + (["general"] if self.general else [])
+            self.log("model: auto (%s)" % (", ".join(names) or "no models found - heuristic mode"))
+            return bool(names)
         full = path if os.path.isabs(path) else os.path.join(self.root, path)
         try:
             m = try_load(full)
         except Exception as exc:
             self.model_error = str(exc)
-            self.log("model load failed: %s" % exc, "warn")
+            self.log("model load failed (%s) - using auto mode" % exc, "warn")
             return False
         if m is None:
             self.model_error = "model file not found: %s" % path
-            self.log(self.model_error, "warn")
+            self.log(self.model_error + " - using auto mode", "warn")
             return False
         z = self.cfg["zones"]
         if (m.zone_rows, m.zone_cols) != (z["rows"], z["cols"]):
             self.log("model zone grid %dx%d differs from config %dx%d - retrain recommended"
                      % (m.zone_rows, m.zone_cols, z["rows"], z["cols"]), "warn")
         self.model = m
-        self.model_error = None
         self.log("model loaded: %s" % m.name)
         return True
+
+    def pick_model(self, n_alive: int) -> Optional[ScanModel]:
+        """Primary model if it was trained for this many boards (or for any number and no
+        specialist exists); otherwise the specialist for the current board count."""
+        m = self.model
+        if m is not None:
+            trained_for = m.meta.get("nodes")
+            if trained_for == n_alive or (trained_for is None and n_alive not in self.specialists):
+                return m
+        if n_alive in self.specialists:
+            return self.specialists[n_alive]
+        if m is not None:
+            return m
+        if self.general is not None:
+            return self.general
+        if self.specialists:  # nearest board count available
+            return self.specialists[min(self.specialists, key=lambda k: abs(k - n_alive))]
+        return None
 
     # ---- baselines ----------------------------------------------------------------------
     def _baseline_file(self) -> str:
@@ -354,7 +396,7 @@ class Engine:
         if self.autocal_job and now >= self.autocal_job["end"]:
             self._finish_autocal()
 
-        win = self.cfg["window_s"]
+        win = LONG_S
         slots, bls, valid = [], [], []
         for n in self.cfg["nodes"][:N_SLOTS]:
             buf = self.nodes[int(n["id"])]
@@ -378,8 +420,10 @@ class Engine:
         engine_kind = "idle"
         if any(valid):
             vec = window_features(slots, bls, self.geom)
-            if self.model is not None:
-                pred = self.model.predict(vec)
+            model = self.pick_model(sum(valid))
+            self.active_model = model
+            if model is not None:
+                pred = model.predict(vec)
                 probs, zp, xy = pred["activity"][0], pred["zone"][0], pred["xy"][0]
                 counts = (pred["n_move"][0], pred["n_still"][0])
                 engine_kind = "model"
@@ -548,7 +592,8 @@ class Engine:
             "unknown_nodes": list(self.unknown.values()),
             "recording": rec,
             "baseline_job": bjob,
-            "model": self.model.info() if self.model else {"name": None, "error": self.model_error},
+            "model": (dict(self.active_model.info(), mode="auto" if self.model is None else "fixed")
+                      if getattr(self, "active_model", None) else {"name": None, "error": self.model_error}),
             "truth": self.truth,
             "events": list(self.events)[:25],
             "people": dict(self.people,

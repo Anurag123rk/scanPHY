@@ -285,7 +285,8 @@ def make_app(hub: Hub) -> web.Application:
     async def models(_req):
         out = []
         d = os.path.join(ROOT, "models")
-        active = os.path.abspath(os.path.join(ROOT, hub.cfg.get("model") or ""))
+        am = getattr(hub.engine, "active_model", None)
+        active = os.path.abspath(am.path) if am is not None else ""
         for f in sorted(os.listdir(d)):
             if not f.endswith(".npz"):
                 continue
@@ -295,6 +296,7 @@ def make_app(hub: Hub) -> web.Application:
             except Exception as exc:
                 info = {"name": f[:-4], "error": str(exc)}
             info.update(file=f, size=os.path.getsize(p), active=os.path.abspath(p) == active,
+                        auto=hub.cfg.get("model") in (None, "", "auto"),
                         onnx=os.path.exists(p[:-4] + ".onnx"))
             info.pop("path", None)
             out.append(info)
@@ -303,6 +305,11 @@ def make_app(hub: Hub) -> web.Application:
     async def model_activate(req):
         body = await _body(req)
         name = os.path.basename(body.get("file", ""))
+        if name == "auto":
+            hub.engine.load_model("auto")
+            hub.cfg["model"] = "auto"
+            cfgmod.save_config(hub.cfg, hub.config_path)
+            return _json({"ok": True})
         path = os.path.join(ROOT, "models", name)
         if not os.path.exists(path):
             return _err("model not found", 404)
@@ -341,8 +348,9 @@ def make_app(hub: Hub) -> web.Application:
 
     async def model_delete(req):
         name = os.path.basename(req.match_info["name"])
-        if name == os.path.basename(hub.cfg.get("model") or ""):
-            return _err("cannot delete the active model")
+        if name == os.path.basename(hub.cfg.get("model") or "") or \
+                name in ("scanphy-1node.npz", "scanphy-2node.npz", "scanphy-3node.npz"):
+            return _err("cannot delete the active or a built-in model")
         path = os.path.join(ROOT, "models", name)
         if not os.path.exists(path):
             return _err("not found", 404)
@@ -463,7 +471,9 @@ async def _main(args) -> None:
     print("  dashboard  : http://%s:%d" % (ip, args.http_port))
     if args.ws_port:
         print("  websocket  : ws://%s:%d" % (ip, args.ws_port))
-    print("  model      : %s" % (hub.engine.model.name if hub.engine.model else "none (heuristic mode)"))
+    print("  model      : %s" % (hub.engine.model.name if hub.engine.model else
+                                 "auto (%d per-board-count models%s)" % (
+                                     len(hub.engine.specialists), " + general" if hub.engine.general else "")))
     print("  node target: provision boards with --target-ip %s --target-port %d" % (ip, args.udp_port))
     print("")
     tasks = [asyncio.ensure_future(hub.tick_loop())]
