@@ -433,7 +433,8 @@ class Engine:
                 engine_kind = "heuristic"
             a = min(1.0, dt / 0.35)
             self.act_probs = (1 - a) * self.act_probs + a * probs
-            self.count_probs = tuple((1 - a) * cp + a * np.asarray(c) for cp, c in zip(self.count_probs, counts))
+            ac = min(1.0, dt / 1.5)  # counts: slower smoothing than activity (less flicker)
+            self.count_probs = tuple((1 - ac) * cp + ac * np.asarray(c) for cp, c in zip(self.count_probs, counts))
             p_present = 1.0 - self.act_probs[0]
             if not self.presence and p_present > 0.6:
                 self.presence = True
@@ -506,19 +507,35 @@ class Engine:
         if best is not None:
             self.vitals = best
 
+    def _joint_counts(self, activity: str):
+        """Most likely (moving, still) pair with 1 <= total <= max_people, consistent with activity."""
+        max_p = int(self.cfg.get("max_people", 3))
+        pm, ps = (np.asarray(p, dtype=np.float64) + 1e-6 for p in self.count_probs)
+        best, best_p = (1, 0) if activity == "moving" else (0, 1), -1.0
+        for m in range(4):
+            for s_ in range(4):
+                tot = m + s_
+                if tot < 1 or tot > max_p:
+                    continue
+                if activity == "moving" and m == 0:  # someone is clearly moving
+                    continue
+                if activity == "still" and m > 0 and pm[m] < 0.5:
+                    continue
+                p = pm[m] * ps[s_]
+                if p > best_p:
+                    best, best_p = (m, s_), p
+        return best
+
     def _update_people(self, now: float, activity: str) -> None:
         """Debounced people counts (moving / still / total) + 1 Hz history."""
         if not self.presence:
             cand = {"total": 0, "moving": 0, "still": 0}
         else:
-            mv = int(np.argmax(self.count_probs[0]))
-            st = int(np.argmax(self.count_probs[1]))
-            if mv + st == 0:  # model unsure about the count but someone is there
-                mv, st = (1, 0) if activity == "moving" else (0, 1)
+            mv, st = self._joint_counts(activity)
             cand = {"total": mv + st, "moving": mv, "still": st}
         if cand != self._people_candidate[0]:
             self._people_candidate = (cand, now)
-        elif cand != self.people and now - self._people_candidate[1] > 2.0:
+        elif cand != self.people and now - self._people_candidate[1] > 3.0:
             self.people = cand
             self.log("people: %d (%d moving, %d still)" % (cand["total"], cand["moving"], cand["still"]))
         if now - self._last_hist >= 1.0:

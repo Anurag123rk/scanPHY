@@ -42,7 +42,7 @@ document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
   if (activeTab === "models") loadModels();
   if (activeTab === "setup") buildCfgForm();
   if (activeTab === "train") drawTrainChart();
-  if (activeTab === "people") loadHistory();
+  if (activeTab === "people") { loadHistory(); loadTeachRecs(); }
 });
 
 // ------------------------------------------------------------------ brand wave animation
@@ -747,6 +747,57 @@ function drawPeopleChart() {
   ctx.stroke();
 }
 
+// ------------------------------------------------------------------ teach counts
+const SCENARIOS = [
+  { act: "empty", m: 0, s: 0, title: "Nobody", sub: "everyone leaves the room" },
+  { act: "still", m: 0, s: 1, title: "1 person still", sub: "sit or stand still" },
+  { act: "moving", m: 1, s: 0, title: "1 person walking", sub: "walk around normally" },
+  { act: "still", m: 0, s: 2, title: "2 people still", sub: "both sit / stand still", min: 2 },
+  { act: "moving", m: 1, s: 1, title: "2 people: 1 walks", sub: "one walks, one sits", min: 2 },
+  { act: "moving", m: 2, s: 0, title: "2 people walking", sub: "both walk around", min: 2 },
+  { act: "moving", m: 1, s: 2, title: "3 people: 1 walks", sub: "one walks, two sit", min: 3 },
+  { act: "still", m: 0, s: 3, title: "3 people still", sub: "all three sit still", min: 3 },
+];
+let teachRecs = [], teachBusy = false;
+const scenKey = (act, m, s) => `${act}:${m}:${s}`;
+function renderTeach() {
+  const maxP = CFG ? CFG.max_people || 3 : 3;
+  const count = {};
+  for (const r of teachRecs) {
+    const l = r.label, d = { empty: [0, 0], still: [0, 1], moving: [1, 0] }[l.activity] || [0, 0];
+    const k = scenKey(l.activity, l.moving_count ?? d[0], l.still_count ?? d[1]);
+    count[k] = (count[k] || 0) + 1;
+  }
+  $("#teachGrid").innerHTML = SCENARIOS.filter((x) => (x.min || 0) <= maxP).map((x, i) =>
+    `<button data-scen="${SCENARIOS.indexOf(x)}" ${teachBusy ? "disabled" : ""}><b>${x.title}</b><small>${x.sub} · recorded ${count[scenKey(x.act, x.m, x.s)] || 0}×</small></button>`).join("");
+  document.querySelectorAll("[data-scen]").forEach((b) => b.onclick = () => teach(SCENARIOS[+b.dataset.scen], b));
+}
+async function loadTeachRecs() {
+  try { teachRecs = await (await fetch("/api/recordings")).json(); } catch (e) { teachRecs = []; }
+  renderTeach();
+}
+async function teach(sc, btn) {
+  if (teachBusy) return;
+  teachBusy = true; renderTeach();
+  try {
+    for (let c = 5; c > 0; c--) { $("#teachInfo").textContent = `${sc.title}: get into position… ${c}`; await sleep(1000); }
+    await api("/api/record", { json: { activity: sc.act, moving_count: sc.m, still_count: sc.s, seconds: +$("#teachSecs").value } });
+    await sleep(400);
+    while (STATE && STATE.recording) { $("#teachInfo").textContent = `${sc.title}: recording ${STATE.recording.elapsed.toFixed(0)} / ${STATE.recording.seconds} s - stay as you are`; await sleep(300); }
+    $("#teachInfo").textContent = `${sc.title}: saved ✓`;
+    toast("recording saved");
+  } catch (e) { toast(e.message); $("#teachInfo").textContent = e.message; }
+  teachBusy = false; loadTeachRecs();
+}
+$("#btnTeachCancel").onclick = () => api("/api/record/cancel", { method: "POST" }).catch(() => {});
+$("#btnTeachTrain").onclick = async () => {
+  try { await api("/api/train", { json: { reason: "teach counts" } }); toast("training started - watch the Train tab"); }
+  catch (e) { toast(e.message); }
+};
+$("#maxPeople").onchange = async (e) => {
+  try { await api("/api/config", { json: { max_people: +e.target.value } }); toast("max people = " + e.target.value); } catch (er) { toast(er.message); }
+};
+
 // ------------------------------------------------------------------ auto-calibration
 $("#btnAutocal").onclick = async () => {
   try { await api("/api/autocal", { json: { seconds: +$("#acSecs").value } }); toast("auto-calibration started - leave the room for 30 s"); }
@@ -792,6 +843,8 @@ function applyConfig(cfg) {
   scene3d.build(cfg);
   ensureNodeCards(cfg);
   if (activeTab === "setup") buildCfgForm();
+  $("#maxPeople").value = String(cfg.max_people || 3);
+  renderTeach();
   drawFloor();
 }
 function connect() {

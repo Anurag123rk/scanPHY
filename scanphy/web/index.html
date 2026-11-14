@@ -108,6 +108,19 @@
       <button class="chip on" data-win="10">10 MIN</button><button class="chip" data-win="30">30 MIN</button><button class="chip" data-win="60">60 MIN</button></div>
     <canvas id="peopleChart" class="chart"></canvas>
   </div>
+  <div class="card">
+    <div class="card-h"><span>TEACH COUNTS (MAKES COUNTING ACCURATE IN YOUR ROOM)</span><span class="spacer"></span>
+      <label>max people in this room <select id="maxPeople"><option>1</option><option>2</option><option>3</option></select></label></div>
+    <p class="muted">The built-in models learned from simulated rooms only. Record each situation that really happens in your room
+      (press the button, get into position during the countdown, then stay like that until it finishes), do each one 2-3 times,
+      then press TRAIN. More examples = better counts. Set "max people" to the most people that will ever be here.</p>
+    <div class="row"><label>seconds per recording <input type="number" id="teachSecs" value="30" min="10" max="120"></label>
+      <span class="muted" id="teachInfo"></span></div>
+    <div class="teach" id="teachGrid"></div>
+    <div class="row"><button class="btn" id="btnTeachTrain">TRAIN WITH MY RECORDINGS</button>
+      <button class="btn btn-ghost" id="btnTeachCancel">CANCEL RECORDING</button>
+      <span class="muted">training runs in the background - see the Train tab</span></div>
+  </div>
   <div class="card log">
     <div class="card-h"><span>COUNT CHANGES</span><span class="spacer"></span><span class="muted">counting is experimental · up to 3 people · more boards = better</span></div>
     <ul id="peopleEvents"></ul>

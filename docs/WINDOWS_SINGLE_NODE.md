@@ -166,6 +166,17 @@ and the top bar shows `MODEL ROOM-…`.
 The trained model is a single file, `models\room-YYYYMMDD-HHMMSS.npz`. Copy it to the Jetson later, or upload it
 under **Models → Upload .npz**.
 
+### Teach it to count people
+
+People counting needs examples from *your* room. Open the **People** tab:
+1. Set **max people in this room** (for example 2).
+2. Click each situation you can act out: *Nobody*, *1 person still*, *1 person walking*, *2 people…*.
+   You get a 5 s countdown to get into position, then it records 30 s. Do each one 2–3 times.
+3. Click **TRAIN WITH MY RECORDINGS**. This takes a few minutes on a laptop CPU; progress shows on the **Train** tab.
+   The new model is switched on automatically when it finishes.
+
+With one board, counting beyond one person stays rough even after teaching. Two or three boards help a lot.
+
 ## Troubleshooting
 
 | Symptom | Fix |

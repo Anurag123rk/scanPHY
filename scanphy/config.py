@@ -32,6 +32,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Optional GLB model of the room (served from data/ or an absolute URL).
     "room_glb": None,
     "autotrain": {"enabled": True, "epochs": 60, "mix_synthetic": True},
+    # Most people that can realistically be in the room (1-3). Counts never exceed it.
+    "max_people": 3,
 }
 
 MAX_NODES = 3
@@ -71,6 +73,7 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     z = cfg["zones"]
     z["rows"], z["cols"] = max(1, int(z["rows"])), max(1, int(z["cols"]))
     cfg["window_s"] = min(max(float(cfg["window_s"]), 0.5), 4.0)
+    cfg["max_people"] = min(max(int(cfg.get("max_people", 3)), 1), 3)
     return cfg
 
 
