@@ -293,9 +293,17 @@ def synth_scene_samples(cfg: Optional[Dict], n: int, seed: int, rate_range=(20.0
             pos = chest = None
         else:
             pos, chest = _trajectory(rng, W, D, T, rate, a)
+        # Node-count dropout: the model must also work with 1 or 2 boards (or a board offline).
+        r_nodes = rng.random()
+        if r_nodes < 0.15 and n_nodes > 1:
+            active = {int(rng.integers(0, n_nodes))}
+        elif r_nodes < 0.30 and n_nodes > 2:
+            active = set(rng.choice(n_nodes, size=2, replace=False).tolist())
+        else:
+            active = set(range(n_nodes))
         slots = []
         for k in range(N_SLOTS):
-            if k >= n_nodes or rng.random() < 0.05:
+            if k not in active or rng.random() < 0.03:
                 slots.append(None)
                 continue
             iq, rssi = scene.quantize(k, scene.channel(k, pos, chest, body, T))

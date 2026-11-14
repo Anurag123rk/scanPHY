@@ -1,0 +1,34 @@
+{
+  "room": {
+    "name": "Single node test",
+    "width": 4.0,
+    "depth": 4.0,
+    "height": 2.8
+  },
+  "router": {
+    "x": 0.3,
+    "y": 2.0,
+    "z": 1.2
+  },
+  "nodes": [
+    {
+      "id": 1,
+      "name": "NODE-1",
+      "x": 3.7,
+      "y": 2.0,
+      "z": 1.0
+    }
+  ],
+  "zones": {
+    "rows": 3,
+    "cols": 3
+  },
+  "window_s": 1.0,
+  "model": "models/scanphy-base.npz",
+  "room_glb": null,
+  "autotrain": {
+    "enabled": true,
+    "epochs": 60,
+    "mix_synthetic": true
+  }
+}

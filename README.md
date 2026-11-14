@@ -33,6 +33,8 @@ and the same 3-board triangle layout, and it adds a model that **trains itself o
 
 The accuracy figures come from the built-in physics simulator. Real rooms vary, so run the calibration wizard (below).
 
+> **Only one board and a Windows laptop?** Follow [docs/WINDOWS_SINGLE_NODE.md](docs/WINDOWS_SINGLE_NODE.md).
+
 ## Repository layout
 
 ```

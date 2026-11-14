@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-FEATURE_VERSION = 2
+FEATURE_VERSION = 3
 N_GROUPS = 13
 N_SLOTS = 3
 PER_NODE = 2 * N_GROUPS + 4
@@ -119,7 +119,13 @@ def window_features(slots: Sequence[Optional[Dict[str, np.ndarray]]], baselines:
             parts.append(np.zeros(PER_NODE, dtype=np.float32))
         else:
             parts.append(node_features(s["profiles"], s["rssi"], b))
-    parts.append(np.asarray(geom, dtype=np.float32))
+    g = np.array(geom, dtype=np.float32)
+    for i in range(N_SLOTS):
+        # A node without data (not configured, offline or dropped) has no position either,
+        # so 1-, 2- and 3-node rooms all look the same to the model.
+        if parts[i][PER_NODE - 1] < 0.5:
+            g[2 * i:2 * i + 2] = 0.0
+    parts.append(g)
     return np.concatenate(parts)
 
 
