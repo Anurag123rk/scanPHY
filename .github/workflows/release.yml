@@ -50,7 +50,14 @@ jobs:
             # Create the tag first, then the release on that existing tag. Creating both in one
             # call fails with 403 for commits other than the pushed one.
             if ! gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" >/dev/null 2>&1; then
-              gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$sha" >/dev/null
+              if ! gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$sha" >/dev/null; then
+                # The Actions token may not create a tag on an older commit whose workflow files
+                # differ from the current ones. Create that release once in the GitHub web UI
+                # (tag $tag, target $sha), then re-run this workflow for the later releases.
+                echo "::warning::Could not create tag $tag at $sha - create this release in the web UI, then re-run."
+                echo "Stopping so that releases stay in order."
+                exit 0
+              fi
             fi
             gh release create "$tag" --verify-tag --title "$title" --notes-file "/tmp/$tag-notes.md" $assets
           done
