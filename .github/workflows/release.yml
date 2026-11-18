@@ -1,10 +1,15 @@
 name: release
 
-# Pushing a tag such as v1.0.0 publishes a GitHub release. The release title is the
-# first line of docs/releases/<tag>.md and the body is the rest of that file.
+# Creates GitHub releases from docs/releases/<tag>.md files.
+#   line 1          "# <release title>"
+#   "commit: <sha>" (optional) commit the release points to; default: the pushed commit
+#   the rest        release notes
+# For every notes file whose release does not exist yet, the release and its tag are created
+# on GitHub at that commit, with that commit's firmware, models and paper attached.
 on:
   push:
-    tags: ["v*"]
+    paths: ["docs/releases/**", ".github/workflows/release.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,20 +19,25 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: prepare notes
-        id: notes
+        with:
+          fetch-depth: 0
+      - name: create missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          f="docs/releases/${GITHUB_REF_NAME}.md"
-          echo "title=$(head -1 "$f" | sed 's/^# *//')" >> "$GITHUB_OUTPUT"
-          tail -n +2 "$f" > release_body.md
-      - uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ steps.notes.outputs.title }}
-          body_path: release_body.md
-          files: |
-            firmware/release/*.bin
-            models/*.npz
-            models/*.onnx
-            docs/paper/*.pdf
-            docs/paper/*.docx
+          set -euo pipefail
+          for f in $(ls docs/releases/v*.md | sort -V); do
+            tag=$(basename "$f" .md)
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "$tag already released"; continue
+            fi
+            sha=$(grep -m1 '^commit:' "$f" | awk '{print $2}' || true)
+            sha=${sha:-$GITHUB_SHA}
+            title=$(head -1 "$f" | sed 's/^# *//')
+            tail -n +2 "$f" | grep -v '^commit:' > "/tmp/$tag-notes.md"
+            git worktree add "/tmp/$tag" "$sha"
+            assets=$(cd "/tmp/$tag" && ls firmware/release/*.bin models/*.npz models/*.onnx docs/paper/*.pdf docs/paper/*.docx 2>/dev/null | sed "s|^|/tmp/$tag/|" || true)
+            echo "creating $tag ($title) at $sha"
+            gh release create "$tag" --target "$sha" --title "$title" --notes-file "/tmp/$tag-notes.md" $assets
+          done
