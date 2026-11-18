@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scanPHY setup for NVIDIA Jetson Orin (JetPack 5.x / 6.x, Ubuntu 20.04 / 22.04).
+# WaveSense 3D setup for NVIDIA Jetson Orin (JetPack 5.x / 6.x, Ubuntu 20.04 / 22.04).
 #
 #   ./scripts/setup_jetson.sh              # venv + dependencies
 #   ./scripts/setup_jetson.sh --torch      # + PyTorch (CUDA) for on-device training
@@ -21,7 +21,7 @@ b() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok() { printf '  \033[1m✓\033[0m %s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*"; }
 
-b "scanPHY setup  ($ROOT)"
+b "WaveSense 3D setup  ($ROOT)"
 if [ -f /etc/nv_tegra_release ]; then ok "Jetson: $(head -1 /etc/nv_tegra_release | cut -c1-60)"; else warn "not a Jetson - continuing anyway"; fi
 
 b "1/4  system packages"
@@ -54,16 +54,16 @@ fi
 mkdir -p "$ROOT/data/recordings" "$ROOT/models"
 [ -f "$ROOT/config/room.json" ] || cp "$ROOT/config/room.example.json" "$ROOT/config/room.json"
 if [ "$WANT_SERVICE" = 1 ]; then
-  sed -e "s#__ROOT__#$ROOT#g" -e "s#__USER__#$USER#g" "$ROOT/scripts/scanphy.service" | sudo tee /etc/systemd/system/scanphy.service >/dev/null
-  sudo systemctl daemon-reload && sudo systemctl enable --now scanphy
-  ok "systemd service 'scanphy' enabled (journalctl -u scanphy -f)"
+  sed -e "s#__ROOT__#$ROOT#g" -e "s#__USER__#$USER#g" "$ROOT/scripts/wavesense.service" | sudo tee /etc/systemd/system/wavesense.service >/dev/null
+  sudo systemctl daemon-reload && sudo systemctl enable --now wavesense
+  ok "systemd service 'wavesense' enabled (journalctl -u wavesense -f)"
 fi
 if command -v nvpmodel >/dev/null; then warn "tip: sudo nvpmodel -m 0 && sudo jetson_clocks   (max performance for training)"; fi
 
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo
 b "done."
-echo "  run:        $ROOT/.venv/bin/python -m scanphy serve"
-echo "  demo:       $ROOT/.venv/bin/python -m scanphy serve --source sim"
+echo "  run:        $ROOT/.venv/bin/python -m wavesense serve"
+echo "  demo:       $ROOT/.venv/bin/python -m wavesense serve --source sim"
 echo "  dashboard:  http://${IP:-localhost}:3000"
 echo "  nodes:      python tools/flash_nodes.py --ssid YOUR_WIFI --target-ip ${IP:-JETSON_IP}"

@@ -1,8 +1,8 @@
 import numpy as np
 
-from scanphy.config import load_config
-from scanphy.features import FEATURE_DIM, amplitudes, geometry_features, shape_profile, window_features
-from scanphy.simulator import synth_scene_samples
+from wavesense.config import load_config
+from wavesense.features import FEATURE_DIM, amplitudes, geometry_features, shape_profile, window_features
+from wavesense.simulator import synth_scene_samples
 
 
 def test_amplitudes_shape_and_gain_invariance():

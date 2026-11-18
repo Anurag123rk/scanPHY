@@ -22,7 +22,7 @@ ax.text(10.4, 27.7, "CSI", fontsize=7.4, style="italic", va="center")
 ax.text(8.6, 27.7, "body changes\nmultipath", fontsize=6.2, ha="right", va="center")
 # edge server
 ax.add_patch(FancyBboxPatch((24, 2), 52, 42, boxstyle="round,pad=0.3,rounding_size=1.5", fc="none", ec="black", lw=1.0, ls="--"))
-ax.text(50, 42.4, "NVIDIA Jetson Orin  -  scanPHY edge server", ha="center", fontsize=9.5, weight="bold")
+ax.text(50, 42.4, "NVIDIA Jetson Orin  -  WaveSense 3D edge server", ha="center", fontsize=9.5, weight="bold")
 box(26, 25, 14, 14, "Receiver", ["UDP :5005", "per-node", "ring buffers"])
 box(43, 25, 14, 14, "DSP features", ["|H| on 52 sc", "gain-invariant", "13 bands, 1 s + 4 s"])
 box(60, 25, 14, 14, "Edge-AI model", ["one per board count", "MLP 149-384-384-128", "5 output heads"])

@@ -1,15 +1,15 @@
 /*
- * scanPHY node firmware for ESP32-S3.
+ * WaveSense 3D node firmware for ESP32-S3.
  *
  * Joins the WiFi network, pings the router at a fixed rate so the router keeps
  * transmitting, captures the Channel State Information (CSI) of every frame received
- * from the router and streams it to the scanPHY server (Jetson) as UDP datagrams.
+ * from the router and streams it to the WaveSense 3D server (Jetson) as UDP datagrams.
  *
  * Configuration (SSID, password, server IP/port, node id, rate) is read from NVS
- * namespace "scanphy" (written by tools/provision.py) and falls back to the
+ * namespace "wavesense" (written by tools/provision.py) and falls back to the
  * menuconfig defaults.
  *
- * Wire format: see scanphy/protocol.py (24-byte header + int8 [imag, real] pairs).
+ * Wire format: see wavesense/protocol.py (24-byte header + int8 [imag, real] pairs).
  */
 
 #include <string.h>
@@ -30,10 +30,10 @@
 #include "lwip/inet.h"
 #include "ping/ping_sock.h"
 
-static const char *TAG = "scanphy";
+static const char *TAG = "wavesense";
 
-#define SCANPHY_MAGIC   0x59485053u   /* "SPHY" */
-#define SCANPHY_VERSION 1
+#define WAVESENSE_MAGIC   0x59485053u   /* "SPHY" */
+#define WAVESENSE_VERSION 1
 #define HEADER_SIZE     24
 #define MAX_CSI_BYTES   384
 #define QUEUE_DEPTH     24
@@ -82,15 +82,15 @@ static esp_ping_handle_t s_ping = NULL;
 static void load_config(void)
 {
     memset(&s_cfg, 0, sizeof(s_cfg));
-    strlcpy(s_cfg.ssid, CONFIG_SCANPHY_WIFI_SSID, sizeof(s_cfg.ssid));
-    strlcpy(s_cfg.pass, CONFIG_SCANPHY_WIFI_PASSWORD, sizeof(s_cfg.pass));
-    strlcpy(s_cfg.ip, CONFIG_SCANPHY_TARGET_IP, sizeof(s_cfg.ip));
-    s_cfg.port = CONFIG_SCANPHY_TARGET_PORT;
-    s_cfg.node = CONFIG_SCANPHY_NODE_ID;
-    s_cfg.rate = CONFIG_SCANPHY_RATE_HZ;
+    strlcpy(s_cfg.ssid, CONFIG_WAVESENSE_WIFI_SSID, sizeof(s_cfg.ssid));
+    strlcpy(s_cfg.pass, CONFIG_WAVESENSE_WIFI_PASSWORD, sizeof(s_cfg.pass));
+    strlcpy(s_cfg.ip, CONFIG_WAVESENSE_TARGET_IP, sizeof(s_cfg.ip));
+    s_cfg.port = CONFIG_WAVESENSE_TARGET_PORT;
+    s_cfg.node = CONFIG_WAVESENSE_NODE_ID;
+    s_cfg.rate = CONFIG_WAVESENSE_RATE_HZ;
 
     nvs_handle_t h;
-    if (nvs_open("scanphy", NVS_READONLY, &h) == ESP_OK) {
+    if (nvs_open("wavesense", NVS_READONLY, &h) == ESP_OK) {
         size_t n;
         n = sizeof(s_cfg.ssid); nvs_get_str(h, "ssid", s_cfg.ssid, &n);
         n = sizeof(s_cfg.pass); nvs_get_str(h, "pass", s_cfg.pass, &n);
@@ -125,8 +125,8 @@ static void csi_cb(void *ctx, wifi_csi_info_t *info)
     packet_t pkt;
     uint16_t len = info->len > MAX_CSI_BYTES ? MAX_CSI_BYTES : info->len;
     frame_header_t *h = (frame_header_t *)pkt.data;
-    h->magic = SCANPHY_MAGIC;
-    h->version = SCANPHY_VERSION;
+    h->magic = WAVESENSE_MAGIC;
+    h->version = WAVESENSE_VERSION;
     h->node_id = s_cfg.node;
     h->n_antennas = 1;
     h->flags = 0;
@@ -269,9 +269,9 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
-    ESP_LOGI(TAG, "scanPHY node firmware starting");
+    ESP_LOGI(TAG, "WaveSense 3D node firmware starting");
     load_config();
     s_queue = xQueueCreate(QUEUE_DEPTH, sizeof(packet_t));
     wifi_init();  /* initialises esp_netif / lwIP first */
-    xTaskCreatePinnedToCore(sender_task, "scanphy_tx", 4096, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(sender_task, "wavesense_tx", 4096, NULL, 5, NULL, 1);
 }

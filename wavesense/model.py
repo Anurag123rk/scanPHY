@@ -1,10 +1,10 @@
-"""Dependency-free (NumPy only) inference runtime for scanPHY models.
+"""Dependency-free (NumPy only) inference runtime for WaveSense 3D models.
 
 A model is a single `.npz` file holding the weights, the input normalisation and a JSON
 metadata blob. It can be trained anywhere (laptop, cloud, or on the Jetson itself with
 CUDA) and copied to the Jetson; inference does not need PyTorch.
 
-Network (identical to scanphy.trainer.Net):
+Network (identical to wavesense.trainer.Net):
     x -> (x - mu) / sigma
       -> Linear(256) -> LayerNorm -> ReLU
       -> Linear(256) -> LayerNorm -> ReLU

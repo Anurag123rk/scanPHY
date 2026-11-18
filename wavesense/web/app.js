@@ -25,11 +25,11 @@ let STATE = null;
 // ------------------------------------------------------------------ theme
 function setTheme(t) {
   document.documentElement.dataset.theme = t;
-  try { localStorage.setItem("scanphy-theme", t); } catch (e) { /* storage blocked */ }
+  try { localStorage.setItem("wavesense-theme", t); } catch (e) { /* storage blocked */ }
   if (scene3d) scene3d.recolor();
 }
 $("#themeBtn").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
-try { const t = localStorage.getItem("scanphy-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
+try { const t = localStorage.getItem("wavesense-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
 
 // ------------------------------------------------------------------ tabs
 let activeTab = "live";
@@ -632,7 +632,7 @@ async function loadModels() {
     }).join("") || `<tr><td colspan="8" class="muted">no models yet</td></tr>`;
     const auto = ms.length && ms[0].auto;
     $("#modelTable tbody").insertAdjacentHTML("afterbegin", `<tr class="${auto ? "active" : ""}"><td>AUTO</td>
-      <td colspan="6" class="muted">uses scanphy-1node / 2node / 3node to match the number of boards streaming right now</td>
+      <td colspan="6" class="muted">uses wavesense-1node / 2node / 3node to match the number of boards streaming right now</td>
       <td>${auto ? '<span class="pill live">ACTIVE</span>' : '<button class="chip" data-act="auto">USE AUTO</button>'}</td></tr>`);
     document.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => { try { await api("/api/models/activate", { json: { file: b.dataset.act } }); toast("model activated"); loadModels(); } catch (e) { toast(e.message); } });
     document.querySelectorAll("[data-mdel]").forEach((b) => b.onclick = async () => { if (confirm("Delete " + b.dataset.mdel + "?")) { await api("/api/models/" + encodeURIComponent(b.dataset.mdel), { method: "DELETE" }); loadModels(); } });
@@ -664,7 +664,7 @@ function buildCfgForm() {
   f.innerHTML = html;
   const host = location.hostname || "JETSON_IP";
   $("#flashCmds").textContent =
-`# 1. build (or download from CI) the scanPHY firmware, then flash every board:
+`# 1. build (or download from CI) the WaveSense 3D firmware, then flash every board:
 python tools/flash_nodes.py --ssid "YOUR_WIFI" --password "YOUR_PASS" \\
     --target-ip ${host} --target-port 5005
 #    (auto-detects each connected ESP32-S3 and assigns node ids 1, 2, 3)
@@ -674,7 +674,7 @@ python tools/provision.py --port /dev/ttyACM0 --node-id 1 \\
     --ssid "YOUR_WIFI" --password "YOUR_PASS" --target-ip ${host}
 
 # 3. check that all nodes stream (stop the server first, or use the dashboard):
-python -m scanphy probe --port 5005`;
+python -m wavesense probe --port 5005`;
 }
 $("#btnSaveCfg").onclick = async () => {
   const patch = JSON.parse(JSON.stringify(CFG));

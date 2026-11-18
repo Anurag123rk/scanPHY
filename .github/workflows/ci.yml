@@ -28,12 +28,12 @@ jobs:
         shell: bash
         run: |
           . $IDF_PATH/export.sh
-          cd firmware/scanphy-node
+          cd firmware/wavesense-node
           idf.py set-target esp32s3
           idf.py build
           mkdir -p ../release
-          cp build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/scanphy-node.bin ../release/
+          cp build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/wavesense-node.bin ../release/
       - uses: actions/upload-artifact@v4
         with:
-          name: scanphy-node-firmware
+          name: wavesense-node-firmware
           path: firmware/release/*.bin

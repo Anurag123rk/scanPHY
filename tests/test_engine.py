@@ -1,9 +1,9 @@
 import os
 import time
 
-from scanphy.config import load_config
-from scanphy.engine import Engine
-from scanphy.simulator import LiveSimulator
+from wavesense.config import load_config
+from wavesense.engine import Engine
+from wavesense.simulator import LiveSimulator
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 

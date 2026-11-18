@@ -4,9 +4,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 sys.path.insert(0, "/home/user/scanPHY")
-from scanphy.config import load_config
-from scanphy.simulator import Scene
-from scanphy.features import amplitudes, shape_profile
+from wavesense.config import load_config
+from wavesense.simulator import Scene
+from wavesense.features import amplitudes, shape_profile
 plt.rcParams["font.family"] = "DejaVu Serif"
 out = sys.argv[1]
 
@@ -63,7 +63,7 @@ plt.tight_layout(); plt.savefig(out + "/fig_csi.png", bbox_inches="tight", facec
 fig, (b1, b2) = plt.subplots(1, 2, figsize=(9, 3.0), dpi=220)
 styles = {1: "-", 2: "--", 3: ":"}
 for n in (1, 2, 3):
-    h = json.load(open("/home/user/scanPHY/models/scanphy-%dnode.json" % n))["history"]
+    h = json.load(open("/home/user/scanPHY/models/wavesense-%dnode.json" % n))["history"]
     ep = [r["epoch"] for r in h]
     b1.plot(ep, [r["loss"] for r in h], styles[n], color="black", lw=1.3, label="%d board%s" % (n, "" if n == 1 else "s"))
     b2.plot(ep, [100 * r["activity_acc"] for r in h], styles[n], color="black", lw=1.3, label="%d board%s" % (n, "" if n == 1 else "s"))
@@ -75,7 +75,7 @@ b2.legend(fontsize=7, frameon=False, loc="lower right")
 plt.tight_layout(); plt.savefig(out + "/fig_training.png", bbox_inches="tight", facecolor="white"); plt.close()
 
 # ---------- Fig: real serial log from the hardware test (network details masked) ----------
-lines = [
+lines = [  # verbatim from the real hardware test (firmware was still called scanPHY then)
     "I (394) scanphy: scanPHY node firmware starting",
     "I (397) scanphy: configuration loaded from NVS",
     "I (397) scanphy: node 1 -> x.x.x.x:5005, ssid '<hotspot>', 50 Hz",

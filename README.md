@@ -1,17 +1,17 @@
-# scanPHY
+# WaveSense 3D
 
 **WiFi CSI human sensing and indoor localisation using 3× ESP32-S3 nodes and an NVIDIA Jetson Orin.**
 There's no camera and nothing to wear: the ESP32-S3 boards measure how a human body disturbs the WiFi channel, and
 a neural network on the Jetson turns that into presence, activity, position and breathing rate. The results are
 shown live in a monochrome 3D dashboard.
 
-scanPHY is a self-contained replacement for a RuView setup. It uses the same ports (UDP 5005 / HTTP 3000 / WS 3001)
+WaveSense 3D is a self-contained replacement for a RuView setup. It uses the same ports (UDP 5005 / HTTP 3000 / WS 3001)
 and the same 3-board triangle layout, and it adds a model that **trains itself on your room**.
 
 ```
  ┌──────────┐  WiFi   ┌────────────┐   CSI over UDP :5005   ┌──────────────────────────────┐
- │  Router  │ ──────▶ │ ESP32-S3 ×3│ ─────────────────────▶ │ Jetson Orin · scanphy serve  │
- └──────────┘ frames  │ scanPHY fw │                        │  DSP → features → NN model   │
+ │  Router  │ ──────▶ │ ESP32-S3 ×3│ ─────────────────────▶ │ Jetson Orin · wavesense serve  │
+ └──────────┘ frames  │ WaveSense 3D fw │                        │  DSP → features → NN model   │
       ▲               └────────────┘                        │  tracker · vitals · trainer  │
       └──── pings (≈50 Hz) keep the router transmitting     └──────────────┬───────────────┘
                                                             HTTP :3000 / WS :3001
@@ -38,7 +38,7 @@ The accuracy figures come from the built-in physics simulator. Real rooms vary, 
 ## Repository layout
 
 ```
-scanphy/            Python package (runs on the Jetson)
+wavesense/            Python package (runs on the Jetson)
   server.py           UDP receiver + REST/WebSocket server + dashboard
   engine.py           live pipeline: buffers → features → model → tracker → vitals
   features.py         feature extraction (shared by inference and training)
@@ -49,9 +49,9 @@ scanphy/            Python package (runs on the Jetson)
   simulator.py        physics-based multipath CSI simulator (training + demo)
   dataset.py          labelled recordings captured from the dashboard
   web/                dashboard (vanilla JS + three.js, works offline)
-firmware/scanphy-node/  ESP-IDF firmware for the ESP32-S3 nodes
+firmware/wavesense-node/  ESP-IDF firmware for the ESP32-S3 nodes
 tools/              provision.py / flash_nodes.py (flash + configure boards)
-models/             scanphy-1node / 2node / 3node.npz (pretrained per board count) + .onnx,
+models/             wavesense-1node / 2node / 3node.npz (pretrained per board count) + .onnx,
                     geometry.npz (router-distance estimator)
 scripts/            Jetson setup, PyTorch installer, systemd unit
 ```
@@ -64,7 +64,7 @@ scripts/            Jetson setup, PyTorch installer, systemd unit
 git clone https://github.com/Anurag123rk/scanPHY.git
 cd scanPHY
 ./scripts/setup_jetson.sh --torch        # venv, deps, CUDA PyTorch; add --service to autostart
-.venv/bin/python -m scanphy serve --source sim   # demo, no hardware needed
+.venv/bin/python -m wavesense serve --source sim   # demo, no hardware needed
 ```
 
 Open `http://<jetson-ip>:3000`. In demo mode a simulated person walks around the room. The ◇ marker shows where the
@@ -73,11 +73,11 @@ person really is, so you can compare it with the estimate.
 ### 2. Firmware
 
 Get the binaries in one of two ways:
-- **CI:** download the `scanphy-node-firmware` artifact from the GitHub Actions run and unzip it into `firmware/release/`.
+- **CI:** download the `wavesense-node-firmware` artifact from the GitHub Actions run and unzip it into `firmware/release/`.
 - **Build it yourself** with ESP-IDF 5.2+, or with Docker:
 
 ```bash
-cd firmware/scanphy-node
+cd firmware/wavesense-node
 docker run --rm -v "$PWD:/project" -w /project espressif/idf:v5.2.2 \
   bash -c "idf.py set-target esp32s3 && idf.py build"
 ```
@@ -107,7 +107,7 @@ Boards still running RuView firmware keep working, because the receiver understa
 ### 5. Run it
 
 ```bash
-.venv/bin/python -m scanphy serve          # or: sudo systemctl start scanphy
+.venv/bin/python -m wavesense serve          # or: sudo systemctl start wavesense
 ```
 
 ### 6. Calibrate and auto-train (recommended)
@@ -128,11 +128,11 @@ result on the Jetson:
 ```bash
 pip install -r requirements.txt -r requirements-train.txt
 # model for a given number of boards (synthetic data):
-python -m scanphy train --nodes 3 --hidden 384 --synthetic 200000 --config config/room.example.json \
+python -m wavesense train --nodes 3 --hidden 384 --synthetic 200000 --config config/room.example.json \
     --epochs 70 --onnx --out models/my-3node.npz
 # fine-tune on recordings copied from the Jetson (data/recordings/):
-python -m scanphy train --recordings data/recordings --config config/room.json \
-    --init models/scanphy-3node.npz --epochs 60 --onnx --out models/my-room.npz
+python -m wavesense train --recordings data/recordings --config config/room.json \
+    --init models/wavesense-3node.npz --epochs 60 --onnx --out models/my-room.npz
 ```
 
 Then **Models → Upload .npz** in the dashboard, or copy the file into `models/` on the Jetson and click **Activate**.
@@ -143,25 +143,25 @@ The `.onnx` export has normalisation and softmax built in, so it is ready for Te
 
 | | |
 |---|---|
-| UDP 5005 | CSI frames, scanPHY v1 format (see `scanphy/protocol.py`); legacy `0xC5110001` frames are also accepted |
+| UDP 5005 | CSI frames, WaveSense 3D v1 format (see `wavesense/protocol.py`); legacy `0xC5110001` frames are also accepted |
 | `http://host:3000` | dashboard |
 | `ws://host:3000/ws`, `ws://host:3001` | JSON state at 10 Hz: `presence, activity, x, y, confidence, zone, vitals, nodes…` |
 | REST | `/api/status`, `/api/config`, `/api/baseline`, `/api/record`, `/api/recordings`, `/api/train`, `/api/models` … |
 
-CLI: `python -m scanphy serve | train | emulate | probe | info`. Use `emulate` to send simulated node traffic over
+CLI: `python -m wavesense serve | train | emulate | probe | info`. Use `emulate` to send simulated node traffic over
 UDP, and `probe` to list which boards are streaming.
 
 ## How it works
 
 1. **Firmware.** Each node pings the router at about 50 Hz and captures CSI (64 LLTF subcarriers) from every frame the
    router sends back. It streams that CSI to the Jetson over UDP.
-2. **Features.** For each node, scanPHY computes a gain-invariant log-amplitude profile across 13 subcarrier bands.
+2. **Features.** For each node, WaveSense 3D computes a gain-invariant log-amplitude profile across 13 subcarrier bands.
    Over the last 1 s it measures how far that profile deviates from an empty-room baseline, how much it varies,
    and RSSI. Over the last 4 s it adds slow variation per band and how much of the signal lies in the breathing
    band (0.15–0.6 Hz) versus the walking band (0.6–2.5 Hz). With the node/router geometry, that gives 149 values.
 3. **Model.** A 3-layer MLP with LayerNorm has five output heads: activity (3 classes), zone (rows×cols), x/y,
    and people counts (0–3 moving, 0–3 still). There is one built-in model per board count (1, 2 and 3 boards).
-   In `"model": "auto"` mode (the default), scanPHY picks the one that matches how many boards are streaming
+   In `"model": "auto"` mode (the default), WaveSense 3D picks the one that matches how many boards are streaming
    right now, so it keeps working when a board drops out.
    The base model is pre-trained on a physics simulator: line-of-sight and wall/floor/ceiling reflections, body
    scattering and blocking, breathing, and radio impairments, over randomised rooms. It is then fine-tuned on your own
@@ -176,7 +176,7 @@ UDP, and `probe` to list which boards are streaming.
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest -q tests
-python -m scanphy serve --source sim --http-port 3000
+python -m wavesense serve --source sim --http-port 3000
 ```
 
-MIT licence. three.js is bundled under its MIT licence (`scanphy/web/vendor/THREE_LICENSE`).
+MIT licence. three.js is bundled under its MIT licence (`wavesense/web/vendor/THREE_LICENSE`).

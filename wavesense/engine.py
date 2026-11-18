@@ -146,10 +146,10 @@ class Engine:
 
     # ---- model --------------------------------------------------------------------------
     def _load_specialists(self) -> None:
-        """Per-board-count models (models/scanphy-<n>node.npz), used in "auto" mode and as fallback."""
+        """Per-board-count models (models/wavesense-<n>node.npz), used in "auto" mode and as fallback."""
         self.specialists: Dict[int, ScanModel] = {}
         for n in (1, 2, 3):
-            path = os.path.join(self.root, "models", "scanphy-%dnode.npz" % n)
+            path = os.path.join(self.root, "models", "wavesense-%dnode.npz" % n)
             try:
                 m = try_load(path)
             except Exception as exc:
@@ -160,7 +160,7 @@ class Engine:
         # General model used when no per-board-count model is available.
         self.general: Optional[ScanModel] = None
         try:
-            self.general = try_load(os.path.join(self.root, "models", "scanphy-base.npz"))
+            self.general = try_load(os.path.join(self.root, "models", "wavesense-base.npz"))
         except Exception:
             self.general = None
 

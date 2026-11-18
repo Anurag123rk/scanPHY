@@ -2,10 +2,10 @@ import os
 
 import numpy as np
 
-from scanphy import autocal
-from scanphy.config import load_config, validate
-from scanphy.features import amplitudes
-from scanphy.simulator import Scene
+from wavesense import autocal
+from wavesense.config import load_config, validate
+from wavesense.features import amplitudes
+from wavesense.simulator import Scene
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 

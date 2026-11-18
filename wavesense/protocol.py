@@ -1,6 +1,6 @@
 """UDP wire format for CSI frames sent by the ESP32-S3 nodes.
 
-scanPHY v1 frame (little endian), 24-byte header followed by CSI samples:
+WaveSense 3D v1 frame (little endian), 24-byte header followed by CSI samples:
 
     off  size  field
     0    4     magic            0x59485053 ("SPHY")
@@ -19,7 +19,7 @@ scanPHY v1 frame (little endian), 24-byte header followed by CSI samples:
 
 For convenience the receiver also understands the 20-byte "0xC5110001" frame
 emitted by boards that are still flashed with the older RuView firmware, so an
-existing deployment keeps working while you migrate the boards to scanPHY firmware.
+existing deployment keeps working while you migrate the boards to WaveSense 3D firmware.
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def parse(data: bytes, rx_time: float = 0.0) -> Optional[CsiFrame]:
 
 def build(node_id: int, seq: int, iq: np.ndarray, rssi: int, noise_floor: int = -95,
           channel: int = 6, timestamp_ms: int = 0) -> bytes:
-    """Encode a scanPHY v1 frame (used by the simulator and the tests)."""
+    """Encode a WaveSense 3D v1 frame (used by the simulator and the tests)."""
     iq = np.asarray(iq, dtype=np.int8).ravel()
     n_sc = iq.size // 2
     head = HEADER.pack(MAGIC, VERSION, node_id & 0xFF, 1, 0, n_sc, channel,

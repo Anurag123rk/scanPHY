@@ -1,6 +1,6 @@
 """Background training manager (auto-train on the Jetson).
 
-Runs `python -m scanphy train ... --json-progress` as a subprocess so the sensing loop
+Runs `python -m wavesense train ... --json-progress` as a subprocess so the sensing loop
 never stalls, streams its progress to the dashboard and hot-loads the new model when
 training finishes.
 """
@@ -71,9 +71,9 @@ class AutoTrainer:
         init = cfg.get("model")
         n_nodes = len(cfg["nodes"])
         if not init or init == "auto" or not os.path.exists(init if os.path.isabs(init) else os.path.join(self.root, init)):
-            init = os.path.join("models", "scanphy-%dnode.npz" % n_nodes)
+            init = os.path.join("models", "wavesense-%dnode.npz" % n_nodes)
         init_path = init if os.path.isabs(init) else os.path.join(self.root, init)
-        args = [sys.executable, "-m", "scanphy", "train", "--json-progress", "--onnx",
+        args = [sys.executable, "-m", "wavesense", "train", "--json-progress", "--onnx",
                 "--config", self.config_path, "--out", self.out_path, "--epochs", str(epochs),
                 "--synthetic", str(int(synthetic) if cfg.get("autotrain", {}).get("mix_synthetic", True) or not has_rec
                                    else 0)]

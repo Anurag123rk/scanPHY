@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Provision (and optionally flash) one scanPHY ESP32-S3 node over USB.
+"""Provision (and optionally flash) one WaveSense 3D ESP32-S3 node over USB.
 
 Writes WiFi credentials, server IP/port, node id and CSI rate into the board's NVS
-partition. With --flash-firmware the scanPHY firmware is written first.
+partition. With --flash-firmware the WaveSense 3D firmware is written first.
 
     pip install esptool esp-idf-nvs-partition-gen
     python tools/provision.py --port /dev/ttyACM0 --node-id 1 \
@@ -25,10 +25,10 @@ NVS_SIZE = "0x6000"
 
 # (offset, candidate paths relative to the repo) - first existing path wins.
 FIRMWARE_PARTS = [
-    ("0x0", ["firmware/release/bootloader.bin", "firmware/scanphy-node/build/bootloader/bootloader.bin"]),
+    ("0x0", ["firmware/release/bootloader.bin", "firmware/wavesense-node/build/bootloader/bootloader.bin"]),
     ("0x8000", ["firmware/release/partition-table.bin",
-                "firmware/scanphy-node/build/partition_table/partition-table.bin"]),
-    ("0x10000", ["firmware/release/scanphy-node.bin", "firmware/scanphy-node/build/scanphy-node.bin"]),
+                "firmware/wavesense-node/build/partition_table/partition-table.bin"]),
+    ("0x10000", ["firmware/release/wavesense-node.bin", "firmware/wavesense-node/build/wavesense-node.bin"]),
 ]
 
 
@@ -43,7 +43,7 @@ def find_firmware(firmware_dir: str = None):
         if path is None:
             raise FileNotFoundError(
                 "firmware binary not found (looked for %s). Build it with `idf.py build` in "
-                "firmware/scanphy-node or download the CI artifact into firmware/release/." % cands[0])
+                "firmware/wavesense-node or download the CI artifact into firmware/release/." % cands[0])
         parts.append((offset, path))
     return parts
 
@@ -55,7 +55,7 @@ def make_nvs(ssid: str, password: str, ip: str, port: int, node: int, rate: int,
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["key", "type", "encoding", "value"])
-        w.writerow(["scanphy", "namespace", "", ""])
+        w.writerow(["wavesense", "namespace", "", ""])
         w.writerow(["ssid", "data", "string", ssid])
         w.writerow(["pass", "data", "string", password])
         w.writerow(["ip", "data", "string", ip])
@@ -89,12 +89,12 @@ def main() -> int:
     p.add_argument("--node-id", type=int, required=True)
     p.add_argument("--ssid", required=True)
     p.add_argument("--password", default="")
-    p.add_argument("--target-ip", required=True, help="IP address of the Jetson running `scanphy serve`")
+    p.add_argument("--target-ip", required=True, help="IP address of the Jetson running `wavesense serve`")
     p.add_argument("--target-port", type=int, default=5005)
     p.add_argument("--rate", type=int, default=50, help="CSI frames per second (5-200)")
-    p.add_argument("--flash-firmware", action="store_true", help="also flash the scanPHY firmware")
+    p.add_argument("--flash-firmware", action="store_true", help="also flash the WaveSense 3D firmware")
     p.add_argument("--firmware-dir", default=None, help="directory with bootloader.bin, partition-table.bin, "
-                                                         "scanphy-node.bin")
+                                                         "wavesense-node.bin")
     p.add_argument("--baud", type=int, default=460800)
     a = p.parse_args()
     try:

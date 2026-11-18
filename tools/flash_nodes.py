@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Flash + provision every connected ESP32-S3 in one go, then verify they stream.
 
-Boards are detected on USB, flashed with the scanPHY firmware and given incrementing
+Boards are detected on USB, flashed with the WaveSense 3D firmware and given incrementing
 node ids (1, 2, 3 ...). Finally the script listens on the UDP port for a few seconds
 and reports which nodes are sending CSI (run it on the Jetson, with the server stopped,
 or pass --no-verify).
@@ -56,7 +56,7 @@ def verify(port: int, seconds: float) -> dict:
     try:
         sock.bind(("0.0.0.0", port))
     except OSError:
-        print("UDP %d is busy (is `scanphy serve` running?) - check the dashboard instead." % port)
+        print("UDP %d is busy (is `wavesense serve` running?) - check the dashboard instead." % port)
         return {}
     sock.settimeout(0.3)
     seen = {}

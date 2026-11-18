@@ -1,4 +1,4 @@
-"""scanPHY edge server: UDP CSI receiver + sensing engine + HTTP/WebSocket dashboard.
+"""WaveSense 3D edge server: UDP CSI receiver + sensing engine + HTTP/WebSocket dashboard.
 
     UDP  :5005   CSI frames from the ESP32-S3 nodes
     HTTP :3000   dashboard + REST API, WebSocket at /ws
@@ -26,7 +26,7 @@ from .dataset import list_recordings
 from .engine import Engine
 from .model import ScanModel
 
-log = logging.getLogger("scanphy")
+log = logging.getLogger("wavesense")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 WEB = os.path.join(os.path.dirname(__file__), "web")
 AUTO_TRAIN_MIN_RECORDINGS = 8
@@ -349,7 +349,7 @@ def make_app(hub: Hub) -> web.Application:
     async def model_delete(req):
         name = os.path.basename(req.match_info["name"])
         if name == os.path.basename(hub.cfg.get("model") or "") or \
-                name in ("scanphy-1node.npz", "scanphy-2node.npz", "scanphy-3node.npz"):
+                name in ("wavesense-1node.npz", "wavesense-2node.npz", "wavesense-3node.npz"):
             return _err("cannot delete the active or a built-in model")
         path = os.path.join(ROOT, "models", name)
         if not os.path.exists(path):
@@ -464,7 +464,7 @@ async def _main(args) -> None:
         await web.TCPSite(ws_runner, args.host, args.ws_port).start()
     ip = _local_ips()[0]
     print("")
-    print("  scanPHY %s  -  WiFi CSI human sensing" % __version__)
+    print("  WaveSense 3D %s  -  WiFi CSI human sensing" % __version__)
     print("  ----------------------------------------------")
     print("  source     : %s" % ("ESP32-S3 nodes on UDP %d" % args.udp_port if args.source == "esp32"
                                  else "built-in simulator"))

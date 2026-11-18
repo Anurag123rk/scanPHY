@@ -1,5 +1,5 @@
 [Unit]
-Description=scanPHY WiFi CSI sensing server
+Description=WaveSense 3D WiFi CSI sensing server
 After=network-online.target
 Wants=network-online.target
 
@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=__USER__
 WorkingDirectory=__ROOT__
-ExecStart=__ROOT__/.venv/bin/python -m scanphy serve --source esp32 --udp-port 5005 --http-port 3000 --ws-port 3001
+ExecStart=__ROOT__/.venv/bin/python -m wavesense serve --source esp32 --udp-port 5005 --http-port 3000 --ws-port 3001
 Restart=on-failure
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1

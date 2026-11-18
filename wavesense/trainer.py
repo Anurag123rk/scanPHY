@@ -2,14 +2,14 @@
 
 Two typical uses:
 
-  1. Base model (already shipped in models/scanphy-base.npz), trained on synthetic,
+  1. Base model (already shipped in models/wavesense-base.npz), trained on synthetic,
      domain-randomised rooms:
-         python -m scanphy train --synthetic 120000 --out models/scanphy-base.npz
+         python -m wavesense train --synthetic 120000 --out models/wavesense-base.npz
 
   2. Room-specific fine-tuning on the Jetson, using recordings captured with the
      dashboard's calibration wizard (this is what auto-train runs):
-         python -m scanphy train --recordings data/recordings --config config/room.json \
-             --init models/scanphy-base.npz --out models/room-<date>.npz
+         python -m wavesense train --recordings data/recordings --config config/room.json \
+             --init models/wavesense-base.npz --out models/room-<date>.npz
 
 Progress is printed as JSON lines when --json-progress is given (consumed by the
 dashboard's training panel).
@@ -320,7 +320,7 @@ def add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--recordings", default=None, help="directory of recordings from the dashboard")
     p.add_argument("--config", default=None, help="room config (geometry + zone grid)")
     p.add_argument("--init", default=None, help="start from this .npz model (fine-tuning)")
-    p.add_argument("--out", default="models/scanphy-room.npz")
+    p.add_argument("--out", default="models/wavesense-room.npz")
     p.add_argument("--epochs", type=int, default=40)
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--lr", type=float, default=0.0)
@@ -337,7 +337,7 @@ def add_args(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="scanphy train")
+    p = argparse.ArgumentParser(prog="wavesense train")
     add_args(p)
     return train(p.parse_args(argv))
 

@@ -1,11 +1,11 @@
-"""scanPHY command line.
+"""WaveSense 3D command line.
 
-    python -m scanphy serve            # run the edge server + dashboard (Jetson)
-    python -m scanphy serve --source sim   # demo without hardware
-    python -m scanphy train ...        # train / fine-tune a model (see trainer.py)
-    python -m scanphy emulate          # emulate 3 ESP32-S3 nodes over UDP
-    python -m scanphy probe            # check which boards are streaming CSI
-    python -m scanphy info MODEL.npz   # print a model card
+    python -m wavesense serve            # run the edge server + dashboard (Jetson)
+    python -m wavesense serve --source sim   # demo without hardware
+    python -m wavesense train ...        # train / fine-tune a model (see trainer.py)
+    python -m wavesense emulate          # emulate 3 ESP32-S3 nodes over UDP
+    python -m wavesense probe            # check which boards are streaming CSI
+    python -m wavesense info MODEL.npz   # print a model card
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def cmd_info(a) -> int:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="scanphy", description="scanPHY WiFi CSI human sensing")
+    p = argparse.ArgumentParser(prog="wavesense", description="WaveSense 3D WiFi CSI human sensing")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("serve", help="run the sensing server and dashboard")

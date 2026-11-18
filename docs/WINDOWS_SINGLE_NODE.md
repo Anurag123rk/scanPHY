@@ -1,6 +1,6 @@
-# Test scanPHY with 1 ESP32-S3 + a Windows laptop
+# Test WaveSense 3D with 1 ESP32-S3 + a Windows laptop
 
-With one board, scanPHY can do **presence** (someone is here or not), **activity** (empty / still / moving)
+With one board, WaveSense 3D can do **presence** (someone is here or not), **activity** (empty / still / moving)
 and **breathing rate**. Position and zones need 3 boards, so you can ignore the x/y values in this setup.
 
 Time needed: about 30 minutes.
@@ -35,7 +35,7 @@ That avoids PowerShell execution-policy errors.
 Check the install by running the demo:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scanphy serve --source sim
+.\.venv\Scripts\python.exe -m wavesense serve --source sim
 ```
 
 Open http://localhost:3000. You should see a simulated person walking around. Press **Ctrl+C** to stop it.
@@ -55,8 +55,8 @@ its data to this address.
 ## 3. Open the firewall (PowerShell **as Administrator**, once)
 
 ```powershell
-New-NetFirewallRule -DisplayName "scanPHY CSI UDP 5005" -Direction Inbound -Protocol UDP -LocalPort 5005 -Action Allow -Profile Any
-New-NetFirewallRule -DisplayName "scanPHY dashboard 3000-3001" -Direction Inbound -Protocol TCP -LocalPort 3000,3001 -Action Allow -Profile Any
+New-NetFirewallRule -DisplayName "WaveSense 3D CSI UDP 5005" -Direction Inbound -Protocol UDP -LocalPort 5005 -Action Allow -Profile Any
+New-NetFirewallRule -DisplayName "WaveSense 3D dashboard 3000-3001" -Direction Inbound -Protocol TCP -LocalPort 3000,3001 -Action Allow -Profile Any
 ```
 
 If Windows later shows a "Windows Defender Firewall has blocked some features" pop-up for Python, click **Allow**.
@@ -71,7 +71,7 @@ If Windows later shows a "Windows Defender Firewall has blocked some features" p
 
 ## 5. Flash the firmware and settings (one command)
 
-Back in a normal PowerShell, in the `scanPHY` folder:
+Back in a normal PowerShell, in the `WaveSense 3D` folder:
 
 ```powershell
 .\.venv\Scripts\python.exe tools\provision.py --port COM5 --node-id 1 `
@@ -95,10 +95,10 @@ Back in a normal PowerShell, in the `scanPHY` folder:
 Within a few seconds you should see:
 
 ```
-I scanphy: node 1 -> 192.168.1.23:5005, ssid 'YOUR_WIFI_NAME', 50 Hz
-I scanphy: connected to aa:bb:cc:dd:ee:ff ch 6 rssi -48
-I scanphy: pinging gateway 192.168.1.1 every 20 ms
-I scanphy: csi cb 251, sent 250, dropped 0, heap ...
+I wavesense: node 1 -> 192.168.1.23:5005, ssid 'YOUR_WIFI_NAME', 50 Hz
+I wavesense: connected to aa:bb:cc:dd:ee:ff ch 6 rssi -48
+I wavesense: pinging gateway 192.168.1.1 every 20 ms
+I wavesense: csi cb 251, sent 250, dropped 0, heap ...
 ```
 
 Press **Ctrl+]** to exit. If you see `disconnected, retrying` over and over, the WiFi name or password is wrong,
@@ -107,7 +107,7 @@ or the network is 5 GHz-only. The ESP32-S3 needs **2.4 GHz**.
 ## 7. Check that data reaches the laptop
 
 ```powershell
-.\.venv\Scripts\python.exe -m scanphy probe
+.\.venv\Scripts\python.exe -m wavesense probe
 ```
 
 Expected output:
@@ -118,7 +118,7 @@ node   1  192.168.1.40     48.0 frames/s  rssi  -47 dBm  64 subcarriers
 
 If you see "no CSI frames received", go back to step 3 (firewall) and check the `--target-ip` you used in step 5.
 
-## 8. Run scanPHY with a one-board room
+## 8. Run WaveSense 3D with a one-board room
 
 Place the board about **1 m high**, **2–4 m from the router**, so that you can walk through the line between
 the router and the board. That line is where a single board senses best.
@@ -132,7 +132,7 @@ Edit `width`/`depth` (room size in metres), plus the router and node `x`/`y` pos
 corner. Save the file, then:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scanphy serve
+.\.venv\Scripts\python.exe -m wavesense serve
 ```
 
 Open **http://localhost:3000**. NODE-1 should show **STREAMING** at about 40–50 frames/s, with a moving CSI waterfall.
@@ -185,7 +185,7 @@ With one board, counting beyond one person stays rough even after teaching. Two 
 | "Failed to connect to ESP32-S3" | Hold BOOT, tap RESET, release BOOT, then retry |
 | Serial log loops on `disconnected, retrying` | Wrong WiFi password, or the network is 5 GHz-only |
 | Board connects but `probe` shows nothing | Firewall (step 3), wrong `--target-ip`, or VPN on the laptop |
-| `probe` says UDP 5005 is busy | `scanphy serve` is already running; just use the dashboard |
+| `probe` says UDP 5005 is busy | `wavesense serve` is already running; just use the dashboard |
 | Always "MOVING" even in an empty room | Capture the baseline again with the room really empty, then do step 9 |
 | Breathing shows `···` | It needs about 13 s of you being still before it shows a number |
 | `Unable to create process using ...python3.14t.exe` | The `py` launcher points to a removed Python. Install 3.12 and use `py -3.12 -m venv .venv` |

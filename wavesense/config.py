@@ -27,7 +27,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Sliding window (seconds) used for every inference.
     "window_s": 1.0,
     # Model file (relative to the project root), or "auto" = the built-in model for the
-    # number of boards currently streaming (models/scanphy-<n>node.npz).
+    # number of boards currently streaming (models/wavesense-<n>node.npz).
     "model": "auto",
     # Optional GLB model of the room (served from data/ or an absolute URL).
     "room_glb": None,

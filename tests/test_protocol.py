@@ -2,7 +2,7 @@ import struct
 
 import numpy as np
 
-from scanphy import protocol
+from wavesense import protocol
 
 
 def test_roundtrip():

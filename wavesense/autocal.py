@@ -1,6 +1,6 @@
 """Automatic calibration.
 
-While the nodes stream for a few minutes, scanPHY:
+While the nodes stream for a few minutes, WaveSense 3D:
 
   1. finds the calmest stretch of data and uses it as the empty-room baseline (no button
      press needed, as long as the room is empty or still for part of the time);

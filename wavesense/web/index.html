@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>scanPHY</title>
+<title>WaveSense 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Space+Grotesk:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="app.css">
@@ -15,7 +15,7 @@
 <header class="topbar">
   <div class="brand">
     <svg viewBox="0 0 64 24" class="brand-wave" aria-hidden="true"><path id="brandPath" d="M0 12 L64 12"/></svg>
-    <span class="brand-name">scan<b>PHY</b></span>
+    <span class="brand-name">Wave<b>Sense</b> 3D</span>
     <span class="brand-sub">wifi csi · human sensing</span>
   </div>
   <nav class="tabs" id="tabs">
@@ -131,7 +131,7 @@
 <section class="tab-page" id="page-calibrate">
   <div class="card">
     <div class="card-h"><span>AUTO-CALIBRATE</span><span class="spacer"></span><span class="muted" id="acStatus">idle</span></div>
-    <p class="muted">The nodes keep pinging the router, so WiFi frames flood the room continuously. scanPHY listens for a few minutes, picks the calmest stretch as the empty-room baseline, measures each link's noise and estimates how far the router is from each board. <b>Leave the room (or stay completely still) for at least the first 30 s.</b></p>
+    <p class="muted">The nodes keep pinging the router, so WiFi frames flood the room continuously. WaveSense 3D listens for a few minutes, picks the calmest stretch as the empty-room baseline, measures each link's noise and estimates how far the router is from each board. <b>Leave the room (or stay completely still) for at least the first 30 s.</b></p>
     <div class="row"><label>duration <select id="acSecs"><option value="60">1 min</option><option value="120" selected>2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
       <button class="btn" id="btnAutocal">START AUTO-CALIBRATION</button><button class="btn btn-ghost" id="btnAutocalStop">CANCEL</button></div>
     <div class="progress big"><i id="acProg"></i></div>
@@ -141,7 +141,7 @@
     <div class="card">
       <div class="card-h"><span>CALIBRATION WIZARD</span></div>
       <ol class="steps">
-        <li><b>Empty-room baseline.</b> Everyone leaves the room. scanPHY learns what the room looks like with no one in it.
+        <li><b>Empty-room baseline.</b> Everyone leaves the room. WaveSense 3D learns what the room looks like with no one in it.
           <div class="row"><label>seconds <input type="number" id="blSecs" value="20" min="5" max="120"></label>
           <button class="btn" id="btnBaseline">CAPTURE BASELINE</button></div>
           <div class="progress"><i id="blProg"></i></div></li>
@@ -213,7 +213,7 @@
     <div class="card-h"><span>MODELS</span><span class="spacer"></span>
       <label class="btn btn-ghost upload">UPLOAD .NPZ<input type="file" id="modelUpload" accept=".npz"></label>
       <button class="chip" id="btnModelsRefresh">REFRESH</button></div>
-    <p class="muted">Models are single <code>.npz</code> files. Train anywhere with <code>python -m scanphy train</code>, then upload here or copy into <code>models/</code> on the Jetson.</p>
+    <p class="muted">Models are single <code>.npz</code> files. Train anywhere with <code>python -m wavesense train</code>, then upload here or copy into <code>models/</code> on the Jetson.</p>
     <table class="tbl" id="modelTable"><thead><tr><th>name</th><th>kind</th><th>created</th><th>activity</th><th>zone</th><th>xy err</th><th>device</th><th></th></tr></thead><tbody></tbody></table>
   </div>
 </section>
