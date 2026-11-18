@@ -1,0 +1,33 @@
+name: release
+
+# Pushing a tag such as v1.0.0 publishes a GitHub release. The release title is the
+# first line of docs/releases/<tag>.md and the body is the rest of that file.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: prepare notes
+        id: notes
+        shell: bash
+        run: |
+          f="docs/releases/${GITHUB_REF_NAME}.md"
+          echo "title=$(head -1 "$f" | sed 's/^# *//')" >> "$GITHUB_OUTPUT"
+          tail -n +2 "$f" > release_body.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.notes.outputs.title }}
+          body_path: release_body.md
+          files: |
+            firmware/release/*.bin
+            models/*.npz
+            models/*.onnx
+            docs/paper/*.pdf
+            docs/paper/*.docx
