@@ -5,18 +5,33 @@ There's no camera and nothing to wear: the ESP32-S3 boards measure how a human b
 a neural network on the Jetson turns that into presence, activity, position and breathing rate. The results are
 shown live in a monochrome 3D dashboard.
 
+![WaveSense 3D live dashboard](docs/screenshots/live-dark.png)
+
+| People counting | Auto-calibration |
+|---|---|
+| ![People tab](docs/screenshots/people.png) | ![Calibrate tab](docs/screenshots/calibrate.png) |
+| **On-device training** | **Models** |
+| ![Train tab](docs/screenshots/train.png) | ![Models tab](docs/screenshots/models.png) |
+| **Room and board setup** | **Light theme** |
+| ![Setup tab](docs/screenshots/setup.png) | ![Light theme](docs/screenshots/live-light.png) |
+
+<p align="center"><img src="docs/screenshots/mobile.png" width="260" alt="WaveSense 3D on a phone"></p>
+
+*Screenshots are from the built-in simulator (`python -m wavesense serve --source sim`); the "SIM TRUTH" label shows
+where the simulated person really is.*
+
 WaveSense 3D is a self-contained replacement for a RuView setup. It uses the same ports (UDP 5005 / HTTP 3000 / WS 3001)
 and the same 3-board triangle layout, and it adds a model that **trains itself on your room**.
 
 ```
- ┌──────────┐  WiFi   ┌────────────┐   CSI over UDP :5005   ┌──────────────────────────────┐
- │  Router  │ ──────▶ │ ESP32-S3 ×3│ ─────────────────────▶ │ Jetson Orin · wavesense serve  │
- └──────────┘ frames  │ WaveSense 3D fw │                        │  DSP → features → NN model   │
-      ▲               └────────────┘                        │  tracker · vitals · trainer  │
-      └──── pings (≈50 Hz) keep the router transmitting     └──────────────┬───────────────┘
-                                                            HTTP :3000 / WS :3001
-                                                                            ▼
-                                                                  3D dashboard (browser)
+ ┌──────────┐  WiFi   ┌─────────────────┐  CSI over UDP :5005  ┌────────────────────────────────┐
+ │  Router  │ ──────▶ │  ESP32-S3 × 3   │ ───────────────────▶ │ Jetson Orin · wavesense serve  │
+ └──────────┘ frames  │ WaveSense 3D fw │                      │  DSP → features → NN model     │
+      ▲               └─────────────────┘                      │  tracker · vitals · trainer    │
+      └──── pings (≈50 Hz) keep the router transmitting        └───────────────┬────────────────┘
+                                                                HTTP :3000 / WS :3001
+                                                                               ▼
+                                                                     3D dashboard (browser)
 ```
 
 ## Status
@@ -24,7 +39,7 @@ and the same 3-board triangle layout, and it adds a model that **trains itself o
 | Feature | Status | Notes |
 |---|---|---|
 | Presence detection | ✅ works | 1+ node |
-| Activity (empty / still / moving) | ✅ works | model, ~94 % on simulated rooms |
+| Activity (empty / still / moving) | ✅ works | 87–95 % on simulated rooms (1–3 boards) |
 | Breathing rate | ✅ works | single still person, < 3 m from a link |
 | Zone-level position (3×3 grid) | ✅ works after calibration | 3 nodes, triangle placement |
 | x/y coordinates | ⚠️ approximate | ~0.7 m error in simulation; calibrate your room |

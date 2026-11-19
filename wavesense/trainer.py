@@ -262,7 +262,7 @@ def train(args) -> int:
             nn.utils.clip_grad_norm_(net.parameters(), 2.0)
             opt.step()
             sched.step()
-            tot += float(loss) * len(idx)
+            tot += float(loss.detach()) * len(idx)
             cnt += len(idx)
         vals = {k: _metrics(net, v, device=device) for k, v in val_n.items()}
         main = vals.get("real") or vals.get("synthetic") or {}
